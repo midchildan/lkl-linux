@@ -5,13 +5,14 @@ general:
 dependencies:
   pre:
     - sudo apt-get update; sudo apt-get install bc libfuse-dev libarchive-dev xfsprogs valgrind
+    - cd .. && git clone git://github.com/libos-nuse/buildrump.sh
+    - cd ../buildrump.sh && git checkout linux-libos && ./buildrump.sh checkout
+
   post:
-    - make defconfig ARCH=lkl
-    - make ARCH=lkl -j8
+    - cd ../buildrump.sh && ./buildrump.sh -l ../lkl-linux -o obj -d rump -qq -j16 fullbuild
 
 test:
   override:
-    - cd tools/lkl && make -j8
     - cd tools/lkl && make test
     - ? >
         if [ -n "${RUN_NIGHTLY_BUILD}" ]; then

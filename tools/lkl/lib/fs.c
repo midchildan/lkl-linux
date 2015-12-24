@@ -75,7 +75,7 @@ long lkl_mount_dev(unsigned int disk_id, const char *fs_type, int flags,
 	dev = get_virtio_blkdev(disk_id);
 
 	snprintf(dev_str, sizeof(dev_str), "/dev/%08x", dev);
-	snprintf(mnt_str, mnt_str_len, "/mnt/%08x", dev);
+//	snprintf(mnt_str, mnt_str_len, "/mnt/%08x", dev);
 
 	err = lkl_sys_access("/dev", LKL_S_IRWXO);
 	if (err < 0) {
@@ -89,26 +89,33 @@ long lkl_mount_dev(unsigned int disk_id, const char *fs_type, int flags,
 	if (err < 0)
 		return err;
 
-	err = lkl_sys_access("/mnt", LKL_S_IRWXO);
+	err = lkl_sys_access(mnt_str, LKL_S_IRWXO);
 	if (err < 0) {
 		if (err == -LKL_ENOENT)
-			err = lkl_sys_mkdir("/mnt", 0700);
+			err = lkl_sys_mkdir(mnt_str, 0700);
 		if (err < 0)
 			return err;
 	}
-
+#if 0 //ndef LIBRUMPUSER
 	err = lkl_sys_mkdir(mnt_str, 0700);
 	if (err < 0) {
 		lkl_sys_unlink(dev_str);
 		return err;
 	}
-
+#endif
 	err = lkl_sys_mount(dev_str, mnt_str, (char*)fs_type, flags, data);
 	if (err < 0) {
 		lkl_sys_unlink(dev_str);
 		lkl_sys_rmdir(mnt_str);
 		return err;
 	}
+
+	/* FIXME: move somewhere else */
+	err = lkl_sys_mkdir("/tmp", 0700);
+	err = lkl_sys_mkdir("/usr", 0700);
+	err = lkl_sys_mkdir("/usr/local", 0700);
+	err = lkl_sys_mkdir("/usr/local/nginx", 0700);
+	err = lkl_sys_mkdir("/usr/local/nginx/logs", 0700);
 
 	return 0;
 }

@@ -54,6 +54,12 @@ config RWSEM_GENERIC_SPINLOCK
 	bool
 	default y
 
+config PCI
+	bool "PCI support"
+	select NO_GENERIC_PCI_IOPORT_MAP
+	select GENERIC_PCI_IOMAP
+	default y
+
 source init/Kconfig
 
 source net/Kconfig
@@ -63,6 +69,8 @@ source drivers/base/Kconfig
 source drivers/virtio/Kconfig
 
 source drivers/block/Kconfig
+
+source drivers/net/Kconfig
 
 source fs/Kconfig
 

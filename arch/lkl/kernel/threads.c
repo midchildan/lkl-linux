@@ -3,30 +3,35 @@
 #include <linux/sched.h>
 #include <asm/host_ops.h>
 
+#include "rump.h"
+
 static int threads_counter;
 static void *threads_counter_lock;
 
 static inline void threads_counter_inc(void)
 {
-	lkl_ops->sem_down(threads_counter_lock);
+	rump_sem_down(threads_counter_lock);
+
 	threads_counter++;
-	lkl_ops->sem_up(threads_counter_lock);
+	rump_sem_up(threads_counter_lock);
 }
 
 static inline void threads_counter_dec(void)
 {
-	lkl_ops->sem_down(threads_counter_lock);
+	rump_sem_down(threads_counter_lock);
+
 	threads_counter--;
-	lkl_ops->sem_up(threads_counter_lock);
+	rump_sem_up(threads_counter_lock);
 }
 
 static inline int threads_counter_get(void)
 {
 	int counter;
 
-	lkl_ops->sem_down(threads_counter_lock);
+	rump_sem_down(threads_counter_lock);
+
 	counter = threads_counter;
-	lkl_ops->sem_up(threads_counter_lock);
+	rump_sem_up(threads_counter_lock);
 
 	return counter;
 }
@@ -39,10 +44,12 @@ struct thread_info *alloc_thread_info_node(struct task_struct *task, int node)
 	if (!ti)
 		return NULL;
 
+	memset(ti, 0, sizeof(*ti));
 	ti->exit_info = NULL;
 	ti->prev_sched = NULL;
-	ti->sched_sem = lkl_ops->sem_alloc(0);
+	ti->sched_sem = rump_sem_alloc(0);
 	ti->task = task;
+	ti->rump_client = NULL;
 	if (!ti->sched_sem) {
 		kfree(ti);
 		return NULL;
@@ -57,7 +64,8 @@ static void kill_thread(struct thread_exit_info *ei)
 		return;
 
 	ei->dead = true;
-	lkl_ops->sem_up(ei->sched_sem);
+
+	rump_sem_up(ei->sched_sem);
 }
 
 void free_thread_info(struct thread_info *ti)
@@ -103,14 +111,14 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	abs_prev = prev;
 	_prev->exit_info = &ei;
 
-	lkl_ops->sem_up(_next->sched_sem);
+	rump_sem_up(_next->sched_sem);
 	/* _next may be already gone so use ei instead */
-	lkl_ops->sem_down(ei.sched_sem);
+	rump_sem_down(ei.sched_sem);
 
 	if (ei.dead) {
-		lkl_ops->sem_free(ei.sched_sem);
+		rump_sem_free(ei.sched_sem);
 		threads_counter_dec();
-		lkl_ops->thread_exit();
+		rumpuser_thread_exit();
 	}
 
 	_prev->exit_info = NULL;
@@ -131,7 +139,7 @@ static void thread_bootstrap(void *_tba)
 	int (*f)(void *) = tba->f;
 	void *arg = tba->arg;
 
-	lkl_ops->sem_down(ti->sched_sem);
+	rump_sem_down(ti->sched_sem);
 	kfree(tba);
 	if (ti->prev_sched)
 		schedule_tail(ti->prev_sched);
@@ -146,6 +154,7 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 	struct thread_info *ti = task_thread_info(p);
 	struct thread_bootstrap_arg *tba;
 	int ret;
+	void *thr;
 
 	tba = kmalloc(sizeof(*tba), GFP_KERNEL);
 	if (!tba)
@@ -155,7 +164,8 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 	tba->arg = (void *)unused;
 	tba->ti = ti;
 
-	ret = lkl_ops->thread_create(thread_bootstrap, tba);
+	ret = rumpuser_thread_create((void * (*)(void *))thread_bootstrap, tba,
+				     "thread", 0, 1, -1, &thr);
 	if (ret) {
 		kfree(tba);
 		return -ENOMEM;
@@ -188,14 +198,14 @@ int threads_init(void)
 	ti->exit_info = NULL;
 	ti->prev_sched = NULL;
 
-	ti->sched_sem = lkl_ops->sem_alloc(0);
+	ti->sched_sem = rump_sem_alloc(0);
 	if (!ti->sched_sem) {
 		pr_early("lkl: failed to allocate init schedule semaphore\n");
 		ret = -ENOMEM;
 		goto out;
 	}
 
-	threads_counter_lock = lkl_ops->sem_alloc(1);
+	threads_counter_lock = rump_sem_alloc(1);
 	if (!threads_counter_lock) {
 		pr_early("lkl: failed to alllocate threads counter lock\n");
 		ret = -ENOMEM;
@@ -205,7 +215,7 @@ int threads_init(void)
 	return 0;
 
 out_free_init_sched_sem:
-	lkl_ops->sem_free(ti->sched_sem);
+	rump_sem_free(ti->sched_sem);
 
 out:
 	return ret;
@@ -230,6 +240,6 @@ void threads_cleanup(void)
 	while (threads_counter_get())
 		;
 
-	lkl_ops->sem_free(init_thread_union.thread_info.sched_sem);
-	lkl_ops->sem_free(threads_counter_lock);
+	rump_sem_free(init_thread_union.thread_info.sched_sem);
+	rump_sem_free(threads_counter_lock);
 }

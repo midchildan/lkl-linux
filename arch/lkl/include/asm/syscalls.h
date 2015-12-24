@@ -3,6 +3,7 @@
 
 int run_syscalls(void);
 long lkl_syscall(long no, long *params);
+long lkl_sys_halt(void);
 
 #define sys_mmap sys_ni_syscall
 #define sys_clone sys_ni_syscall

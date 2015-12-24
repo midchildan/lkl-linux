@@ -20,3 +20,6 @@ valgrind:
 	$(call valgrind_test,btrfs)
 	$(call valgrind_test,vfat)
 	$(call valgrind_test,xfs)
+
+clean:
+	@rm -f *.o boot

@@ -25,6 +25,7 @@ struct thread_info {
 	struct thread_exit_info *exit_info;
 	struct task_struct *prev_sched;
 	unsigned long stackend;
+	void *rump_client;	/* for syscall proxy */
 };
 
 #define INIT_THREAD_INFO(tsk)				\

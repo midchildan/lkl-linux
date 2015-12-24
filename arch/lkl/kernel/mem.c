@@ -2,8 +2,10 @@
 #include <linux/mm.h>
 #include <linux/swap.h>
 
+#include "rump.h"
+
 unsigned long memory_start, memory_end;
-static unsigned long _memory_start, mem_size;
+static unsigned long _memory_start, _mem_size;
 
 void *empty_zero_page;
 
@@ -11,7 +13,8 @@ void __init bootmem_init(int mem_size)
 {
 	int bootmap_size;
 
-	_memory_start = (unsigned long)lkl_ops->mem_alloc(mem_size);
+	_mem_size = mem_size;
+	rumpuser_malloc(mem_size, 0, (void **)&_memory_start);
 	memory_start = _memory_start;
 	BUG_ON(!memory_start);
 	memory_end = memory_start + mem_size;
@@ -55,7 +58,7 @@ void __init mem_init(void)
 	/* this will put all memory onto the freelists */
 	totalram_pages = free_all_bootmem();
 	pr_info("Memory available: %luk/%luk RAM\n",
-		(nr_free_pages() << PAGE_SHIFT) >> 10, mem_size >> 10);
+		(nr_free_pages() << PAGE_SHIFT) >> 10, _mem_size >> 10);
 }
 
 /*
@@ -68,5 +71,5 @@ void free_initmem(void)
 
 void free_mem(void)
 {
-	lkl_ops->mem_free((void *)_memory_start);
+	rumpuser_free((void *)_memory_start, -1);
 }

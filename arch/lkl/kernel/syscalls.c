@@ -11,6 +11,8 @@
 #include <asm/host_ops.h>
 #include <asm/syscalls.h>
 
+#include "rump.h"
+
 typedef long (*syscall_handler_t)(long arg1, ...);
 
 #undef __SYSCALL
@@ -59,7 +61,7 @@ static long run_syscall(struct syscall *s)
 	task_work_run();
 
 	if (s->sem)
-		lkl_ops->sem_up(s->sem);
+		rump_sem_up(s->sem);
 	return ret;
 }
 
@@ -82,7 +84,7 @@ int run_syscalls(void)
 	}
 
 	s->ret = 0;
-	lkl_ops->sem_up(s->sem);
+	rump_sem_up(s->sem);
 
 	return 0;
 }
@@ -114,14 +116,14 @@ long lkl_syscall(long no, long *params)
 	s.no = no;
 	s.params = params;
 
-	s.sem = lkl_ops->sem_alloc(0);
+	s.sem = rump_sem_alloc(0);
 	if (!s.sem)
 		return -ENOMEM;
 
 	lkl_trigger_irq(syscall_irq, &s);
 
-	lkl_ops->sem_down(s.sem);
-	lkl_ops->sem_free(s.sem);
+	rump_sem_down(s.sem);
+	rump_sem_free(s.sem);
 
 	return s.ret;
 }
