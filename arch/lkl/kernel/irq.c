@@ -11,44 +11,27 @@
 
 #include "rump.h"
 static bool irqs_enabled;
+static bool irqs_triggered;
 
-#define MAX_IRQS	16
 static struct irq_info {
-	struct pt_regs regs[MAX_IRQS];
 	const char *user;
-	int count;
+	bool triggered;
 } irqs[NR_IRQS];
-static void *irqs_lock;
 
-static void do_IRQ(int irq, struct pt_regs *regs)
-{
-	struct pt_regs *old_regs = set_irq_regs(regs);
-
-	irq_enter();
-	generic_handle_irq(irq);
-	irq_exit();
-
-	set_irq_regs(old_regs);
-}
-
+/**
+ * DO NOT run any linux calls (e.g. printk) here as they may race with the
+ * existing linux threads.
+ */
 int lkl_trigger_irq(int irq, void *data)
 {
-	struct pt_regs regs = {
-		.irq_data = data,
-	};
 	int ret = 0;
 
 	if (irq >= NR_IRQS)
 		return -EINVAL;
 
-	rump_sem_down(irqs_lock);
-	if (irqs[irq].count < MAX_IRQS) {
-		irqs[irq].regs[irqs[irq].count] = regs;
-		irqs[irq].count++;
-	} else {
-		ret = -EOVERFLOW;
-	}
-	rump_sem_up(irqs_lock);
+	irqs[irq].triggered = true;
+	__sync_synchronize();
+	irqs_triggered = true;
 
 	wakeup_cpu();
 
@@ -57,15 +40,18 @@ int lkl_trigger_irq(int irq, void *data)
 
 static void run_irqs(void)
 {
-	int i, j;
+	int i;
 
-	rump_sem_down(irqs_lock);
-	for (i = 0; i < NR_IRQS; i++) {
-		for (j = 0; j < irqs[i].count; j++)
-			do_IRQ(i, &irqs[i].regs[j]);
-		irqs[i].count = 0;
+	if (!__sync_fetch_and_and(&irqs_triggered, 0))
+		return;
+
+	for (i = 1; i < NR_IRQS; i++) {
+		if (__sync_fetch_and_and(&irqs[i].triggered, 0)) {
+			irq_enter();
+			generic_handle_irq(i);
+			irq_exit();
+		}
 	}
-	rump_sem_up(irqs_lock);
 }
 
 int show_interrupts(struct seq_file *p, void *v)
@@ -113,11 +99,6 @@ void arch_local_irq_restore(unsigned long flags)
 	irqs_enabled = flags;
 }
 
-void free_IRQ(void)
-{
-	rump_sem_free(irqs_lock);
-}
-
 static int lkl_irq_request_resource(struct irq_data *data)
 {
 	return rump_pci_irq_request(data);
@@ -151,9 +132,6 @@ struct irq_chip dummy_lkl_irq_chip = {
 void init_IRQ(void)
 {
 	int i;
-
-	irqs_lock = rump_sem_alloc(1);
-	BUG_ON(!irqs_lock);
 
 	for (i = 0; i < NR_IRQS; i++)
 		irq_set_chip_and_handler(i, &dummy_lkl_irq_chip, handle_simple_irq);

@@ -1,6 +1,8 @@
 #ifndef _LKL_H
 #define _LKL_H
 
+#define _LKL_LIBC_COMPAT_H
+
 #include <lkl/asm/syscalls.h>
 
 #if __LKL__BITS_PER_LONG == 64
@@ -57,12 +59,12 @@ static inline long long lkl_sys_lseek(unsigned int fd, __lkl__kernel_loff_t off,
 const char *lkl_strerror(int err);
 
 /**
- * lkl_disk_backstore - host dependend disk backstore
+ * lkl_disk - host disk handle
  *
  * @fd - a POSIX file descriptor that can be used by preadv/pwritev
  * @handle - an NT file handle that can be used by ReadFile/WriteFile
  */
-union lkl_disk_backstore {
+union lkl_disk {
 	int fd;
 	void *handle;
 };
@@ -72,10 +74,10 @@ union lkl_disk_backstore {
  *
  * Must be called before calling lkl_start_kernel.
  *
- * @backstore - the disk backstore
+ * @disk - the host disk handle
  * @returns a disk id (0 is valid) or a strictly negative value in case of error
  */
-int lkl_disk_add(union lkl_disk_backstore backstore);
+int lkl_disk_add(union lkl_disk disk);
 
 /**
  * lkl_mount_dev - mount a disk
@@ -151,5 +153,69 @@ int lkl_errdir(struct lkl_dir *dir);
  * the directory handle, or a negative value otherwise
  */
 int lkl_dirfd(struct lkl_dir *dir);
+
+/**
+ * lkl_if_up - activate network interface
+ *
+ * @ifindex - the ifindex of the interface
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_if_up(int ifindex);
+
+/**
+ * lkl_if_down - deactivate network interface
+ *
+ * @ifindex - the ifindex of the interface
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_if_down(int ifindex);
+
+/**
+ * lkl_if_set_ipv4 - set IPv4 address on interface
+ *
+ * @ifindex - the ifindex of the interface
+ * @addr - 4-byte IP address (i.e., struct in_addr)
+ * @netmask_len - prefix length of the @addr
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_if_set_ipv4(int ifindex, unsigned int addr, unsigned int netmask_len);
+
+/**
+ * lkl_set_ipv4_gateway - add an IPv4 default route
+ *
+ * @addr - 4-byte IP address of the gateway (i.e., struct in_addr)
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_set_ipv4_gateway(unsigned int addr);
+
+/**
+ * lkl_netdev - host network device handle
+ *
+ * @fd - TAP device or packet socket file descriptor
+ */
+union lkl_netdev {
+	int fd;
+};
+
+/**
+ * lkl_netdev_add - add a new network device
+ *
+ * Must be called before calling lkl_start_kernel.
+ *
+ * @nd - the network device host handle
+ * @mac - optional MAC address for the device
+ * @returns a network device id (0 is valid) or a strictly negative value in
+ * case of error
+ */
+int lkl_netdev_add(union lkl_netdev nd, void *mac);
+
+/**
+ * lkl_netdev_get_ifindex - retrieve the interface index for a given network
+ * device id
+ *
+ * @id - the network device id
+ * @returns the interface index or a stricly negative value in case of error
+ */
+int lkl_netdev_get_ifindex(int id);
 
 #endif

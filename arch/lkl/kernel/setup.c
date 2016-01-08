@@ -153,7 +153,6 @@ void arch_cpu_idle(void)
 {
 	if (halt) {
 		threads_cleanup();
-		free_IRQ();
 		free_mem();
 		rump_sem_up(halt_sem);
 		rumpuser_thread_exit();

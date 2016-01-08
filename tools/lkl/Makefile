@@ -22,10 +22,11 @@ source += $(wildcard *.c)
 lib_source += lib/posix-host.c
 CFLAGS += -fPIC
 LDFLAGS += -lpthread -lrt -ldl
-source += $(wildcard *.c)
 execs =  cpfromfs
 lib += lib/liblkl.so
+lib += lib/liblkl-hijack.so
 else ifeq ($(OUTPUT_FORMAT),pe-i386)
+lib_source = $(filter-out virtio_net.c,$(lib_source))
 lib_source += lib/nt-host.c
 KOPT="KALLSYMS_EXTRA_PASS=1"
 else
@@ -45,6 +46,12 @@ lib = lib/liblinux.a
 lib_objs = $(patsubst %.c,%.o, $(lib_source))
 objs = $(patsubst %.c,%.o, $(source))
 execs += $(patsubst %.c,%, $(source))
+
+ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64))
+lib += lib/liblkl_hijack.so
+hijack_objs = $(patsubst %.c,%.o,$(wildcard lib/hijack/*.c))
+objs += $(hijack_objs)
+endif
 
 # if there is no librumpuser.a, then skip execs build
 ifeq (,$(wildcard $(RUMP_LIB)/librumpuser*))
@@ -70,6 +77,15 @@ lib/liblkl.so: $(lib_objs) lib/lkl.o
 lib/liblinux.a: lib/lkl.o
 	$(AR) -rc $@ $^
 
+lib/liblkl_hijack.so: LDFLAGS += -ldl
+lib/liblkl_hijack.so: $(hijack_objs) lib/liblkl.a
+	$(CC) -o $@ -shared $^  $(LDFLAGS)
+
+# order of -lxxx again really matters for LD_PRELOAD
+lib/liblkl-hijack.so: $(hijack_objs) Makefile lib/liblkl.so
+	$(CC) -shared -nodefaultlibs $(lib_objs) -Llib -llkl $(hijack_objs) \
+	-ldl -lpthread -lrt -o $@
+
 lib/lkl.o:
 	$(MAKE) -C ../.. ARCH=lkl defconfig
 	$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(PWD)
@@ -81,8 +97,10 @@ $(lib_objs): lib/lkl.o
 $(objs): lib/lkl.o
 $(execs): lib/liblkl.a
 
-clean:
+host-clean:
 	-rm -rf include/lkl/ $(lib) $(lib_objs) lib/lkl.o $(objs) $(execs)
+
+clean: host-clean
 	$(MAKE) -C ../.. ARCH=lkl clean
 	$(MAKE) -C tests clean
 

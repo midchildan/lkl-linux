@@ -11,6 +11,9 @@
 #include <time.h>
 #include <stdint.h>
 #include <sys/uio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <poll.h>
 #undef sa_handler
 #include <lkl_host.h>
 #include "iomem.h"
@@ -158,11 +161,11 @@ struct lkl_host_operations lkl_host_ops = {
 	.virtio_devices = lkl_virtio_devs,
 };
 
-int fd_get_capacity(union lkl_disk_backstore bs, unsigned long long *res)
+static int fd_get_capacity(union lkl_disk disk, unsigned long long *res)
 {
 	off_t off;
 
-	off = lseek(bs.fd, 0, SEEK_END);
+	off = lseek(disk.fd, 0, SEEK_END);
 	if (off < 0)
 		return -1;
 
@@ -170,43 +173,92 @@ int fd_get_capacity(union lkl_disk_backstore bs, unsigned long long *res)
 	return 0;
 }
 
-void fd_do_rw(union lkl_disk_backstore bs, unsigned int type, unsigned int prio,
-	      unsigned long long sector, struct lkl_dev_buf *bufs, int count)
+static int blk_request(union lkl_disk disk, struct lkl_blk_req *req)
 {
 	int err = 0;
-	struct iovec *iovec = (struct iovec *)bufs;
-
-	if (count > 1)
-		lkl_printf("%s: %d\n", __func__, count);
+	struct iovec *iovec = (struct iovec *)req->buf;
 
 	/* TODO: handle short reads/writes */
-	switch (type) {
+	switch (req->type) {
 	case LKL_DEV_BLK_TYPE_READ:
-		err = preadv(bs.fd, iovec, count, sector * 512);
+		err = preadv(disk.fd, iovec, req->count, req->sector * 512);
 		break;
 	case LKL_DEV_BLK_TYPE_WRITE:
-		err = pwritev(bs.fd, iovec, count, sector * 512);
+		err = pwritev(disk.fd, iovec, req->count, req->sector * 512);
 		break;
 	case LKL_DEV_BLK_TYPE_FLUSH:
 	case LKL_DEV_BLK_TYPE_FLUSH_OUT:
 #ifdef __linux__
-		err = fdatasync(bs.fd);
+		err = fdatasync(disk.fd);
 #else
-		err = fsync(bs.fd);
+		err = fsync(disk.fd);
 #endif
 		break;
 	default:
-		lkl_dev_blk_complete(bufs, LKL_DEV_BLK_STATUS_UNSUP, 0);
-		return;
+		return LKL_DEV_BLK_STATUS_UNSUP;
 	}
 
 	if (err < 0)
-		lkl_dev_blk_complete(bufs, LKL_DEV_BLK_STATUS_IOERR, 0);
-	else
-		lkl_dev_blk_complete(bufs, LKL_DEV_BLK_STATUS_OK, err);
+		return LKL_DEV_BLK_STATUS_IOERR;
+
+	return LKL_DEV_BLK_STATUS_OK;
 }
 
 struct lkl_dev_blk_ops lkl_dev_blk_ops = {
 	.get_capacity = fd_get_capacity,
-	.request = fd_do_rw,
+	.request = blk_request,
 };
+
+static int net_tx(union lkl_netdev nd, void *data, int len)
+{
+	int ret;
+
+	ret = write(nd.fd, data, len);
+	if (ret <= 0 && errno == -EAGAIN)
+		return -1;
+	return 0;
+}
+
+static int net_rx(union lkl_netdev nd, void *data, int *len)
+{
+	int ret;
+
+	ret = read(nd.fd, data, *len);
+	if (ret <= 0)
+		return -1;
+	*len = ret;
+	return 0;
+}
+
+static int net_poll(union lkl_netdev nd, int events)
+{
+	struct pollfd pfd = {
+		.fd = nd.fd,
+	};
+	int ret = 0;
+
+	if (events & LKL_DEV_NET_POLL_RX)
+		pfd.events |= POLLIN;
+	if (events & LKL_DEV_NET_POLL_TX)
+		pfd.events |= POLLOUT;
+
+	while (poll(&pfd, 1, -1) < 0 && errno == EINTR)
+		;
+
+	if (pfd.revents & (POLLHUP | POLLNVAL))
+		return -1;
+
+	if (pfd.revents & POLLIN)
+		ret |= LKL_DEV_NET_POLL_RX;
+	if (pfd.revents & POLLOUT)
+		ret |= LKL_DEV_NET_POLL_TX;
+
+	return ret;
+}
+
+struct lkl_dev_net_ops lkl_dev_net_ops = {
+	.tx = net_tx,
+	.rx = net_rx,
+	.poll = net_poll,
+};
+
