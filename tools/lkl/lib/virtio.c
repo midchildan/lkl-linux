@@ -37,17 +37,14 @@
 
 #define BIT(x) (1ULL << x)
 
-struct virtio_queue {
-	uint32_t num_max;
-	uint32_t num;
-	uint32_t ready;
-
-	struct lkl_vring_desc *desc;
-	struct lkl_vring_avail *avail;
-	struct lkl_vring_used *used;
-	uint16_t last_avail_idx;
-};
-
+#ifdef DEBUG
+#define bad_driver(msg) do {					\
+		lkl_printf("LKL virtio error: %s\n", msg);	\
+		lkl_host_ops.panic();				\
+	} while (0)
+#else
+#define bad_driver(msg) do { } while (0)
+#endif /* DEBUG */
 
 static inline uint16_t virtio_get_used_event(struct virtio_queue *q)
 {
@@ -62,7 +59,7 @@ static inline void virtio_set_avail_event(struct virtio_queue *q, uint16_t val)
 static inline void virtio_deliver_irq(struct virtio_dev *dev)
 {
 	dev->int_status |= VIRTIO_MMIO_INT_VRING;
-	lkl_trigger_irq(dev->irq, NULL);
+	lkl_trigger_irq(dev->irq);
 }
 
 void virtio_req_complete(struct virtio_req *req, uint32_t len)
@@ -82,30 +79,51 @@ void virtio_req_complete(struct virtio_req *req, uint32_t len)
 		virtio_deliver_irq(dev);
 }
 
+/* Grab the vring_desc from the queue at the appropriate index in the
+ * queue's circular buffer, converting from little-endian to
+ * the host's endianness. */
+static inline struct lkl_vring_desc *vring_desc_at_le_idx(struct virtio_queue *q,
+							__lkl__virtio16 le_idx)
+{
+	return &q->desc[le16toh(le_idx) & (q->num -1)];
+}
+
+/* Initialize buf to hold the same info as the vring_desc */
+static void init_dev_buf_from_vring_desc(struct lkl_dev_buf *buf,
+					struct lkl_vring_desc *vring_desc)
+{
+	buf->addr = (void *)(uintptr_t)le64toh(vring_desc->addr);
+	buf->len = le32toh(vring_desc->len);
+
+	if (!(buf->addr && buf->len))
+		bad_driver("bad vring_desc\n");
+}
+
 static int virtio_process_one(struct virtio_dev *dev, struct virtio_queue *q,
 			      int idx)
 {
-	int j, ret;
-	uint16_t prev_flags = LKL_VRING_DESC_F_NEXT;
-	struct lkl_vring_desc *i;
+	int q_buf_cnt = 0, ret = -1;
 	struct virtio_req req = {
 		.dev = dev,
 		.q = q,
 		.idx = q->avail->ring[idx & (q->num - 1)],
 	};
+	uint16_t prev_flags = LKL_VRING_DESC_F_NEXT;
+	struct lkl_vring_desc *curr_vring_desc = vring_desc_at_le_idx(q, req.idx);
 
-	for (i = &q->desc[le16toh(req.idx) & (q->num - 1)], j = 0;
-	     prev_flags & LKL_VRING_DESC_F_NEXT;
-	     i = &q->desc[le16toh(i->next) & (q->num - 1)], j++) {
-		prev_flags = le16toh(i->flags);
-		if (j >= VIRTIO_REQ_MAX_BUFS)
-			continue;
-		req.buf[j].addr = (void *)(uintptr_t)le64toh(i->addr);
-		req.buf[j].len = le32toh(i->len);
+	while ((prev_flags & LKL_VRING_DESC_F_NEXT) &&
+		(q_buf_cnt < VIRTIO_REQ_MAX_BUFS)) {
+		prev_flags = le16toh(curr_vring_desc->flags);
+		init_dev_buf_from_vring_desc(&req.buf[q_buf_cnt++], curr_vring_desc);
+		curr_vring_desc = vring_desc_at_le_idx(q, curr_vring_desc->next);
 	}
 
-	req.buf_count = j;
+	/* Somehow, we've built a request that's too long to fit onto our device */
+	if (q_buf_cnt == VIRTIO_REQ_MAX_BUFS &&
+		(prev_flags & LKL_VRING_DESC_F_NEXT))
+		bad_driver("enqueued too many request bufs");
 
+	req.buf_count = q_buf_cnt;
 	ret = dev->ops->enqueue(dev, &req);
 	if (ret < 0)
 		return ret;
@@ -113,6 +131,23 @@ static int virtio_process_one(struct virtio_dev *dev, struct virtio_queue *q,
 	return 0;
 }
 
+/* NB: we can enter this function two different ways in the case of
+ * netdevs --- either through a tx/rx thread poll (which the LKL
+ * scheduler knows nothing about) or through virtio_write called
+ * inside an interrupt handler, so to be safe, it's not enough to
+ * synchronize only the tx/rx polling threads.
+ *
+ * At the moment, it seems like only netdevs require the
+ * synchronization we do here (i.e. locking around operations on a
+ * particular virtqueue, with dev->ops->acquire_queue), since they
+ * have these two different entry points, one of which isn't managed
+ * by the LKL scheduler. So only devs corresponding to netdevs will
+ * have non-NULL acquire/release_queue.
+ *
+ * In the future, this may change. If you see errors thrown in virtio
+ * driver code by block/console devices, you should be suspicious of
+ * the synchronization going on here.
+ */
 void virtio_process_queue(struct virtio_dev *dev, uint32_t qidx)
 {
 	struct virtio_queue *q = &dev->queue[qidx];
@@ -120,12 +155,18 @@ void virtio_process_queue(struct virtio_dev *dev, uint32_t qidx)
 	if (!q->ready)
 		return;
 
+	if (dev->ops->acquire_queue)
+		dev->ops->acquire_queue(dev, qidx);
+
 	virtio_set_avail_event(q, q->avail->idx);
 
 	while (q->last_avail_idx != le16toh(q->avail->idx)) {
 		if (virtio_process_one(dev, q, q->last_avail_idx) < 0)
-			return;
+			break;
 	}
+
+	if (dev->ops->release_queue)
+		dev->ops->release_queue(dev, qidx);
 }
 
 static inline uint32_t virtio_read_device_features(struct virtio_dev *dev)
@@ -321,7 +362,7 @@ static char *devs = lkl_virtio_devs;
 int virtio_dev_setup(struct virtio_dev *dev, int queues, int num_max)
 {
 	int qsize = queues * sizeof(*dev->queue);
-	int ret, avail, mmio_size;
+	int avail, mmio_size;
 	int i;
 
 	dev->irq = lkl_get_free_irq("virtio");
@@ -339,21 +380,23 @@ int virtio_dev_setup(struct virtio_dev *dev, int queues, int num_max)
 		dev->queue[i].num_max = num_max;
 
 	mmio_size = VIRTIO_MMIO_CONFIG + dev->config_len;
-	ret = register_iomem(dev, mmio_size, &virtio_ops);
-	if (ret)
+	dev->base = register_iomem(dev, mmio_size, &virtio_ops);
+	if (!dev->base) {
 		lkl_host_ops.mem_free(dev->queue);
+		return -LKL_ENOMEM;
+	}
 
 	avail = sizeof(lkl_virtio_devs) - (devs - lkl_virtio_devs);
 	devs += snprintf(devs, avail, " virtio_mmio.device=%d@0x%lx:%d",
-			 mmio_size, (uintptr_t)dev, dev->irq);
+			 mmio_size, (uintptr_t)dev->base, dev->irq);
 
-	return ret;
+	return 0;
 }
 
 void virtio_dev_cleanup(struct virtio_dev *dev)
 {
 	lkl_put_irq(dev->irq, "virtio");
-	unregister_iomem(dev);
+	unregister_iomem(dev->base);
 	lkl_host_ops.mem_free(dev->queue);
 }
 

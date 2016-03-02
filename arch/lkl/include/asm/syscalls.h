@@ -1,7 +1,7 @@
 #ifndef _ASM_LKL_SYSCALLS_H
 #define _ASM_LKL_SYSCALLS_H
 
-int run_syscalls(void);
+int initial_syscall_thread(void *);
 long lkl_syscall(long no, long *params);
 long lkl_sys_halt(void);
 

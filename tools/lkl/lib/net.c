@@ -1,7 +1,6 @@
 #include <string.h>
 #include <stdio.h>
 #include "endian.h"
-#undef s_addr
 #include <lkl_host.h>
 
 
@@ -9,7 +8,7 @@ static inline void set_sockaddr(struct lkl_sockaddr_in *sin, unsigned int addr,
 				unsigned short port)
 {
 	sin->sin_family = LKL_AF_INET;
-	sin->sin_addr.s_addr = addr;
+	sin->sin_addr.lkl_s_addr = addr;
 	sin->sin_port = port;
 }
 
@@ -59,6 +58,28 @@ int lkl_if_down(int ifindex)
 		ifr.lkl_ifr_flags &= ~LKL_IFF_UP;
 		err = lkl_sys_ioctl(sock, LKL_SIOCSIFFLAGS, (long)&ifr);
 	}
+
+	lkl_sys_close(sock);
+
+	return err;
+}
+
+int lkl_if_set_mtu(int ifindex, int mtu)
+{
+	struct lkl_ifreq ifr;
+	int err, sock;
+
+	sock = lkl_sys_socket(LKL_AF_INET, LKL_SOCK_DGRAM, 0);
+	if (sock < 0)
+		return sock;
+
+	err = ifindex_to_name(sock, &ifr, ifindex);
+	if (err < 0)
+		return err;
+
+	ifr.lkl_ifr_mtu = mtu;
+
+	err = lkl_sys_ioctl(sock, LKL_SIOCSIFMTU, (long)&ifr);
 
 	lkl_sys_close(sock);
 

@@ -1,13 +1,13 @@
-CFLAGS := -Iinclude -Wall -g -O2 -Wextra -Wno-unused-parameter \
-	  -Wno-missing-field-initializers -fno-strict-aliasing \
-	  -U_FORTIFY_SOURCE -fno-stack-protector
+# Do not use make's built-in rules
+# (this improves performance and avoids hard-to-debug behaviour);
+# also do not print "Entering directory..." messages from make
+.SUFFIXES:
+MAKEFLAGS += -r --no-print-directory 
 
-ifdef CROSS_COMPILE
-CC=$(CROSS_COMPILE)gcc
-AR=$(CROSS_COMPILE)ar
-LD=$(CROSS_COMPILE)ld
+ifeq ($(V),1)
+  Q =
 else
-CC=gcc
+  Q = @
 endif
 
 OUTPUT_FORMAT=$(shell $(LD) -r -print-output-format)
@@ -15,44 +15,81 @@ RUMP_PREFIX?=$(abspath ../../../rumpobj/)
 RUMP_LIB=$(RUMP_PREFIX)/rump/lib
 RUMP_INCLUDE?=$(RUMP_PREFIX)/
 CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
+# default target
+all:
 
-lib_source = $(filter-out %-host.c,$(wildcard lib/*.c))
-source = $(wildcard tests/*.c)
-lib = lib/liblkl.a lib/liblinux.a
+-include ../scripts/Makefile.include
+
+# By default we want to use gcc (as does Linux), especially as the clang
+# cross toolchain does not use prefixed names
+CC    := $(CROSS_COMPILE)gcc
+LD    := $(CROSS_COMPILE)$(LD)
+AR    := $(CROSS_COMPILE)$(AR)
+export CC LD AR
+
+EXESUF   := 
+SOSUF    := .so
+
+PREFIX   := /usr
+
+ifeq (,$(srctree))
+  srctree := $(patsubst %/,%,$(dir $(shell pwd)))
+  srctree := $(patsubst %/,%,$(dir $(srctree)))
+endif
+export srctree
+
+
+# Target build configuration
+
+export CFLAGS += -Iinclude -Wall -g -O2 -Wextra -Wno-unused-parameter \
+	  -Wno-missing-field-initializers -fno-strict-aliasing \
+	  -U_FORTIFY_SOURCE -fno-stack-protector
+
+OUTPUT_FORMAT = $(shell $(LD) -r -print-output-format)
+
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd elf32-littlearm))
-source += $(wildcard *.c)
-lib_source += lib/posix-host.c
-CFLAGS += -fPIC
-LDFLAGS += -lpthread -lrt -ldl
-execs =  cpfromfs
-lib += lib/liblkl.so
-lib += lib/liblkl-hijack.so
-else ifeq ($(OUTPUT_FORMAT),pe-i386)
-lib_source = $(filter-out virtio_net.c,$(lib_source))
-lib_source += lib/nt-host.c
-KOPT="KALLSYMS_EXTRA_PASS=1"
+  OUTPUT_DEF = $(shell echo | $(CC) -dM -E -)
+  CFLAGS   += -fPIC -pthread
+  ifeq (,$(filter $(OUTPUT_DEF),__ANDROID__))
+    LDLIBS   += -lrt -lpthread
+  endif
+  export CONFIG_AUTO_LKL_POSIX_HOST=y
+else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
+  KOPT      = "KALLSYMS_EXTRA_PASS=1"
+  LDLIBS   += -lws2_32
+  EXESUF   := .exe
+  SOSUF    := .dll
+  export CONFIG_AUTO_LKL_NT_HOST=y
 else
-$(error Unrecognized platform: $(OUTPUT_FORMAT))
+  $(error Unrecognized platform: $(OUTPUT_FORMAT))
 endif
 
-ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf64-x86-64-freebsd))
-CFLAGS += -D_FILE_OFFSET_BITS=64
+ALL_PROGRAMS := lklfuse$(EXESUF) cptofs$(EXESUF) cpfromfs$(EXESUF) fs2tar$(EXESUF)
+ALL_LIBRARIES := liblkl.a liblkl$(SOSUF) liblkl-hijack$(SOSUF)
+
+static: liblkl.a
+shared: liblkl$(SOSUF)
+hijack: liblkl-hijack$(SOSUF)
+
+liblkl$(SOSUF): lib/lkl-in.o lib/lkl.o
+liblkl$(SOSUF): LDFLAGS += -shared
+
+liblkl-hijack$(SOSUF): lib/hijack/hijack-in.o liblkl.a
+liblkl-hijack$(SOSUF): LDFLAGS += -shared -nodefaultlibs
+liblkl-hijack$(SOSUF): LDLIBS += -ldl
+
+lklfuse$(EXESUF): lklfuse-in.o liblkl.a
+lklfuse$(EXESUF): LDLIBS += -lfuse
+
+fs2tar$(EXESUF): fs2tar-in.o liblkl.a
+fs2tar$(EXESUF): LDLIBS += -larchive
+ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
+  fs2tar$(EXESUF): LDLIBS += -largp
 endif
 
-# XXX for frankenlibc, only build liblinux.a for now
-lib_source = lib/rump-host.c lib/iomem.c lib/utils.c lib/net.c lib/fs.c lib/virtio.c lib/virtio_blk.c lib/virtio_net.c
-source =
-execs =
-lib = lib/liblinux.a
-
-lib_objs = $(patsubst %.c,%.o, $(lib_source))
-objs = $(patsubst %.c,%.o, $(source))
-execs += $(patsubst %.c,%, $(source))
-
-ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64))
-lib += lib/liblkl_hijack.so
-hijack_objs = $(patsubst %.c,%.o,$(wildcard lib/hijack/*.c))
-objs += $(hijack_objs)
+cptofs$(EXESUF): cptofs-in.o liblkl.a
+ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
+  cptofs$(EXESUF): LDLIBS += -largp
 endif
 
 # if there is no librumpuser.a, then skip execs build
@@ -62,64 +99,78 @@ else
 LDFLAGS += -L$(RUMP_LIB) -Wl,-rpath,$(RUMP_LIB) -lrumpuser
 endif
 
-all: $(lib) $(execs)
+TEST_TARGETS        := test valgrind gdb
 
-install:
-	install -D lib/liblinux.a ${DESTDIR}/lib/
-	mkdir -p ${DESTDIR}/include/linux/
-	install -D ../../arch/lkl/include/linux/rump_syscalls.h \
-		${DESTDIR}/include/linux/
+tests/boot: tests/boot-in.o liblkl.a
+$(TEST_TARGETS): tests/boot
 
-lib/liblkl.a: $(lib_objs) lib/lkl.o
-	$(AR) -rc $@ $^
+# because of libdl, liblkl-hijack will not compile on windows
+# fortunately, the test target will handle a missing libhijack.so correctly
+ifeq (,$(filter $(OUTPUT_FORMAT),pe-i386 elf32-littlearm))
+  test: liblkl-hijack$(SOSUF)
+endif
 
-lib/liblkl.so: $(lib_objs) lib/lkl.o
-	$(CC) -o $@ -shared $^
-
-lib/liblinux.a: $(lib_objs) lib/lkl.o
-	$(AR) -rc $@ $^
-
-lib/liblkl_hijack.so: LDFLAGS += -ldl
-lib/liblkl_hijack.so: $(hijack_objs) lib/liblkl.a
-	$(CC) -o $@ -shared $^  $(LDFLAGS)
-
-# order of -lxxx again really matters for LD_PRELOAD
-lib/liblkl-hijack.so: $(hijack_objs) Makefile lib/liblkl.so
-	$(CC) -shared -nodefaultlibs $(lib_objs) -Llib -llkl $(hijack_objs) \
-	-ldl -lpthread -lrt -o $@
+%-in.o: lib/lkl.o FORCE
+	$(Q)$(MAKE) -f $(srctree)/tools/build/Makefile.build dir=$(patsubst %/,%,$(dir $*)) obj=$(notdir $*)
 
 lib/lkl.o:
-	$(MAKE) -C ../.. ARCH=lkl defconfig
-	$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(PWD)
+	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) defconfig
+	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(CURDIR)
 
-%: %.o
-	$(CC) -o $@ $^ $(LDFLAGS)
+liblkl.a: lib/lkl-in.o lib/lkl.o
+	$(QUIET_AR)$(AR) -rc $@ $^
 
-$(lib_objs): lib/lkl.o
-$(objs): lib/lkl.o
-$(execs): lib/liblkl.a
+liblkl$(SOSUF) liblkl-hijack$(SOSUF) lklfuse$(EXESUF) fs2tar$(EXESUF) cptofs$(EXESUF) tests/boot:
+	$(QUIET_LINK)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-host-clean:
-	-rm -rf include/lkl/ $(lib) $(lib_objs) lib/lkl.o $(objs) $(execs)
+cpfromfs$(EXESUF): cptofs$(EXESUF)
+	$(Q)if ! [ -e $@ ]; then ln -s $< $@; fi
 
-clean: host-clean
-	$(MAKE) -C ../.. ARCH=lkl clean
-	$(MAKE) -C tests clean
-
-fs2tar: LDFLAGS += -larchive
-lklfuse: LDFLAGS += -lfuse
-ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
-cptofs: LDFLAGS += -largp
-fs2tar: LDFLAGS += -largp
+# because of argp and fuse, none of the binaries will compile on windows
+# because of libdl, liblkl-hijack will not compile on windows
+# arm-android neither for the moment
+ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
+  all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
+  all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+else ifneq (,$(filter $(OUTPUT_FORMAT),elf32-littlearm))
+  all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES)) $(ALL_PROGRAMS)
+else
+  all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
 endif
-cpfromfs: cptofs
-	if ! [ -e $@ ]; then ln -s $< $@; fi
 
-test:
-	$(MAKE) -C tests
+clean:
+	$(call QUIET_CLEAN, objects)find . -name '*.o' -delete -o -name '\.*.cmd' -delete -o -name '\.*.d' -delete
+	$(call QUIET_CLEAN, headers)$(RM) -r include/lkl/
+	$(call QUIET_CLEAN, "host libraries")$(RM) liblkl.a liblkl$(SOSUF)
+	$(call QUIET_CLEAN, "hijack library")$(RM) liblkl-hijack$(SOSUF)
+	$(call QUIET_CLEAN, programs)$(RM) lklfuse$(EXESUF) fs2tar$(EXESUF) cptofs$(EXESUF) cpfromfs$(EXESUF)
+	$(call QUIET_CLEAN, tests)$(RM) tests/boot
 
-valgrind:
-	$(MAKE) -C tests valgrind
+$(TEST_TARGETS):
+	$(MAKE) -C tests $@
 
+
+headers_install:
+	$(call QUIET_INSTALL, headers) \
+	    install -d $(DESTDIR)$(PREFIX)/include ; \
+	    install -m 644 include/lkl.h include/lkl_host.h $(DESTDIR)$(PREFIX)/include ; \
+	    cp -r include/lkl $(DESTDIR)$(PREFIX)/include
+
+libraries_install: $(ALL_LIBRARIES)
+	$(call QUIET_INSTALL, libraries) \
+	    install -d $(DESTDIR)$(PREFIX)/lib ; \
+	    install -m 644 $(ALL_LIBRARIES) $(DESTDIR)$(PREFIX)/lib
+
+programs_install: $(ALL_PROGRAMS)
+	$(call QUIET_INSTALL, programs) \
+	    install -d $(DESTDIR)$(PREFIX)/bin ; \
+	    install -m 755 $(ALL_PROGRAMS) $(DESTDIR)$(PREFIX)/bin
+
+install: headers_install libraries_install programs_install
+
+
+FORCE: ;
+.PHONY: all clean $(TEST_TARGETS) FORCE
+.PHONY: headers_install libraries_install programs_install install
 .NOTPARALLEL : lib/lkl.o
-.PHONY: install

@@ -1,6 +1,10 @@
 #ifndef _LKL_H
 #define _LKL_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define _LKL_LIBC_COMPAT_H
 
 #include <lkl/asm/syscalls.h>
@@ -19,6 +23,7 @@
 #define lkl_sys_sendfile lkl_sys_sendfile64
 #define lkl_sys_fstatat lkl_sys_fstatat64
 #define lkl_sys_fstat lkl_sys_fstat64
+#define lkl_sys_fcntl lkl_sys_fcntl64
 
 #define lkl_statfs lkl_statfs64
 
@@ -32,8 +37,6 @@ static inline int lkl_sys_fstatfs(unsigned int fd, struct lkl_statfs *buf)
 	return lkl_sys_fstatfs64(fd, sizeof(*buf), buf);
 }
 
-#define lkl_sys_statfs lkl_sys_statsf64
-#define lkl_sys_fstatfs lkl_sys_fstatsf64
 #endif
 
 #ifdef __lkl__NR_llseek
@@ -57,6 +60,14 @@ static inline long long lkl_sys_lseek(unsigned int fd, __lkl__kernel_loff_t off,
  * @returns - string for the given error code
  */
 const char *lkl_strerror(int err);
+
+/**
+ * lkl_perror - prints a string describing the given error code
+ *
+ * @msg - prefix for the error message
+ * @err - error code
+ */
+void lkl_perror(char *msg, int err);
 
 /**
  * lkl_disk - host disk handle
@@ -171,6 +182,15 @@ int lkl_if_up(int ifindex);
 int lkl_if_down(int ifindex);
 
 /**
+ * lkl_if_set_mtu - set MTU on interface
+ *
+ * @ifindex - the ifindex of the interface
+ * @mtu - the requested MTU size
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_if_set_mtu(int ifindex, int mtu);
+
+/**
  * lkl_if_set_ipv4 - set IPv4 address on interface
  *
  * @ifindex - the ifindex of the interface
@@ -217,5 +237,27 @@ int lkl_netdev_add(union lkl_netdev nd, void *mac);
  * @returns the interface index or a stricly negative value in case of error
  */
 int lkl_netdev_get_ifindex(int id);
+
+/**
+ * lkl_create_syscall_thread - create an additional system call thread
+ *
+ * Create a new system call thread. All subsequent system calls issued from this
+ * host thread are queued to the newly created system call thread.
+ *
+ * System call threads must be stopped up by calling @lkl_stop_syscall_thread
+ * before @lkl_halt is called.
+ */
+int lkl_create_syscall_thread(void);
+
+/**
+ * lkl_stop_syscall_thread - stop the associated system call thread
+ *
+ * Stop the system call thread associated with this host thread, if any.
+ */
+int lkl_stop_syscall_thread();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
