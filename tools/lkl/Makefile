@@ -13,6 +13,8 @@ endif
 OUTPUT_FORMAT=$(shell $(LD) -r -print-output-format)
 RUMP_PREFIX?=$(abspath ../../../rumpobj/)
 RUMP_LIB=$(RUMP_PREFIX)/rump/lib
+RUMP_INCLUDE?=$(RUMP_PREFIX)/
+CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
 
 lib_source = $(filter-out %-host.c,$(wildcard lib/*.c))
 source = $(wildcard tests/*.c)
@@ -38,7 +40,7 @@ CFLAGS += -D_FILE_OFFSET_BITS=64
 endif
 
 # XXX for frankenlibc, only build liblinux.a for now
-lib_source =
+lib_source = lib/rump-host.c lib/iomem.c lib/utils.c lib/net.c lib/fs.c lib/virtio.c lib/virtio_blk.c lib/virtio_net.c
 source =
 execs =
 lib = lib/liblinux.a
@@ -74,7 +76,7 @@ lib/liblkl.a: $(lib_objs) lib/lkl.o
 lib/liblkl.so: $(lib_objs) lib/lkl.o
 	$(CC) -o $@ -shared $^
 
-lib/liblinux.a: lib/lkl.o
+lib/liblinux.a: $(lib_objs) lib/lkl.o
 	$(AR) -rc $@ $^
 
 lib/liblkl_hijack.so: LDFLAGS += -ldl

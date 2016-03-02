@@ -51,7 +51,7 @@ struct lkl_host_operations {
 	void (*sem_up)(void *sem);
 	void (*sem_down)(void *sem);
 
-	int (*thread_create)(void (*f)(void *), void *arg);
+	int (*thread_create)(void (*f)(void *), void *arg, void **thr);
 	void (*thread_exit)(void);
 
 	void* (*mem_alloc)(unsigned long);

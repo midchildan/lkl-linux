@@ -81,6 +81,7 @@ void poll_thread(void *arg)
 	}
 }
 
+void franken_recv_thread(int fd, void *thrid);
 int lkl_netdev_add(union lkl_netdev nd, void *mac)
 {
 	struct virtio_net_dev *dev;
@@ -121,10 +122,15 @@ int lkl_netdev_add(union lkl_netdev nd, void *mac)
 	if (ret)
 		goto out_free;
 
-	if (lkl_host_ops.thread_create(poll_thread, &dev->rx_poll) < 0)
+	void *thrid;
+
+	if (lkl_host_ops.thread_create(poll_thread, &dev->rx_poll, &thrid) < 0)
 		goto out_cleanup_dev;
 
-	if (lkl_host_ops.thread_create(poll_thread, &dev->tx_poll) < 0)
+	/* XXX: only for rump: need to use this semantics for franken_poll(2) */
+	franken_recv_thread(nd.fd, thrid);
+
+	if (lkl_host_ops.thread_create(poll_thread, &dev->tx_poll, NULL) < 0)
 		goto out_cleanup_dev;
 
 	/* RX/TX thread polls will exit when the host netdev handle is closed */

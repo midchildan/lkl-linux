@@ -13,13 +13,6 @@
 
 #include "rump.h"
 
-/* FIXME: should be included from somewhere */
-int rumpuser__errtrans(int);
-
-static bool threads_are_go;
-static struct rumpuser_mtx *thrmtx;
-static struct rumpuser_cv *thrcv;
-
 static struct lwp *rump_libos_lwproc_curlwp(void);
 static int rump_libos_lwproc_newlwp(pid_t pid);
 static void rump_libos_lwproc_switch(struct lwp *newlwp);
@@ -238,7 +231,7 @@ static void rump_libos_user_unschedule(int nlocks, int *countp,
 static void rump_libos_user_schedule(int nlocks, void *interlock) {}
 static void rump_libos_hyp_execnotify(const char *comm) {}
 
-static const struct rumpuser_hyperup hyp = {
+const struct rumpuser_hyperup hyp = {
 	.hyp_schedule		= rump_schedule,
 	.hyp_unschedule		= rump_unschedule,
 	.hyp_backend_unschedule	= rump_libos_user_unschedule,
@@ -256,151 +249,3 @@ static const struct rumpuser_hyperup hyp = {
 };
 
 
-struct thrdesc {
-	void (*f)(void *);
-	void *arg;
-	int canceled;
-	void *thrid;
-	struct timespec timeout;
-	struct rumpuser_mtx *mtx;
-	struct rumpuser_cv *cv;
-};
-
-static void *rump_timer_trampoline(void *arg)
-{
-	struct thrdesc *td = arg;
-	void (*f)(void *);
-	void *thrarg;
-	int err;
-
-	/* from src-netbsd/sys/rump/librump/rumpkern/thread.c */
-	/* don't allow threads to run before all CPUs have fully attached */
-	if (!threads_are_go) {
-		rumpuser_mutex_enter_nowrap(thrmtx);
-		while (!threads_are_go) {
-			rumpuser_cv_wait_nowrap(thrcv, thrmtx);
-		}
-		rumpuser_mutex_exit(thrmtx);
-	}
-
-	f = td->f;
-	thrarg = td->arg;
-	if (td->timeout.tv_sec != 0 || td->timeout.tv_nsec != 0) {
-		rumpuser_mutex_enter(td->mtx);
-		err = rumpuser_cv_timedwait(td->cv, td->mtx,
-					    td->timeout.tv_sec,
-					    td->timeout.tv_nsec);
-		if (td->canceled) {
-			if (!td->thrid) {
-				rumpuser_free(td, 0);
-			}
-			goto end;
-		}
-		rumpuser_mutex_exit(td->mtx);
-		/* FIXME: we should not use rumpuser__errtrans here */
-		/* FIXME: 60=>ETIMEDOUT(netbsd) rumpuser__errtrans(ETIMEDOUT)) */
-		if (err && err != 60)
-			goto end;
-	}
-
-	rumpuser_free(td, 0);
-	f(thrarg);
-
-	rumpuser_thread_exit();
-end:
-	return arg;
-}
-
-void *rump_add_timer(__u64 ns, void (*func) (void *arg), void *arg)
-{
-	int ret;
-	struct thrdesc *td;
-
-	rumpuser_malloc(sizeof(*td), 0, (void **)&td);
-
-	memset(td, 0, sizeof(*td));
-	td->f = func;
-	td->arg = arg;
-	td->timeout = (struct timespec){ .tv_sec = ns / NSEC_PER_SEC,
-					 .tv_nsec = ns % NSEC_PER_SEC};
-
-	rumpuser_mutex_init(&td->mtx, RUMPUSER_MTX_SPIN);
-	rumpuser_cv_init(&td->cv);
-
-	ret = rumpuser_thread_create(rump_timer_trampoline, td, "timer",
-				     1, 0, -1, &td->thrid);
-	if (ret) {
-		rumpuser_free(td, 0);
-		return NULL;
-	}
-
-	return td;
-}
-
-void rump_timer_cancel(void *timer)
-{
-	struct thrdesc *td = timer;
-
-	if (td->canceled)
-		return;
-
-	td->canceled = 1;
-	rumpuser_mutex_enter(td->mtx);
-	rumpuser_cv_signal(td->cv);
-	rumpuser_mutex_exit(td->mtx);
-
-	rumpuser_mutex_destroy(td->mtx);
-	rumpuser_cv_destroy(td->cv);
-
-	if (td->thrid)
-		rumpuser_thread_join(td->thrid);
-
-	rumpuser_free(td, 0);
-}
-
-/* from src-netbsd/sys/rump/librump/rumpkern/thread.c */
-void
-rump_thread_allow(struct lwp *l)
-{
-	rumpuser_mutex_enter(thrmtx);
-	if (l == NULL) {
-		threads_are_go = true;
-	}
-
-	rumpuser_cv_broadcast(thrcv);
-	rumpuser_mutex_exit(thrmtx);
-}
-
-#define LKL_MEM_SIZE 100 * 1024 * 1024
-char *boot_cmdline = "";	/* FIXME: maybe we have rump_set_boot_cmdline? */
-int __init rump_init(void)
-{
-	if (rumpuser_init(RUMPUSER_VERSION, &hyp) != 0) {
-		pr_warn("rumpuser init failed\n");
-		return EINVAL;
-	}
-
-	rumpuser_mutex_init(&thrmtx, RUMPUSER_MTX_SPIN);
-	rumpuser_cv_init(&thrcv);
-	threads_are_go = false;
-
-	lkl_start_kernel(NULL, LKL_MEM_SIZE, boot_cmdline);
-
-	rump_thread_allow(NULL);
-	/* FIXME: rumprun doesn't have sysproxy.
-	 * maybe outsourced and linked -lsysproxy for hijack case ? */
-#ifdef ENABLE_SYSPROXY
-	rump_sysproxy_init();
-#endif
-	pr_info("rumpuser started.\n");
-	return 0;
-}
-
-void rump_exit(void)
-{
-	pr_info("rumpuser finishing.\n");
-#ifdef ENABLE_SYSPROXY
-	rump_sysproxy_fini();
-#endif
-	rumpuser_exit(0);
-}

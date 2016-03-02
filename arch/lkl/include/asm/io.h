@@ -2,9 +2,7 @@
 #define _ASM_LKL_IO_H
 
 #include <asm/bug.h>
-#define __dead
-#define __printflike(x,y)
-#include <rump/rumpuser.h>
+#include <asm/host_ops.h>
 
 #define __raw_readb __raw_readb
 static inline u8 __raw_readb(const volatile void __iomem *addr)
@@ -12,7 +10,7 @@ static inline u8 __raw_readb(const volatile void __iomem *addr)
 	int ret;
 	u8 value;
 
-	ret = rumpuser_iomem_access(addr, &value, sizeof(value), 0);
+	ret = lkl_ops->iomem_access(addr, &value, sizeof(value), 0);
 	WARN(ret, "error reading iomem %p", addr);
 
 	return value;
@@ -24,7 +22,7 @@ static inline u16 __raw_readw(const volatile void __iomem *addr)
 	int ret;
 	u16 value;
 
-	ret = rumpuser_iomem_access(addr, &value, sizeof(value), 0);
+	ret = lkl_ops->iomem_access(addr, &value, sizeof(value), 0);
 	WARN(ret, "error reading iomem %p", addr);
 
 	return value;
@@ -36,7 +34,7 @@ static inline u32 __raw_readl(const volatile void __iomem *addr)
 	int ret;
 	u32 value;
 
-	ret = rumpuser_iomem_access(addr, &value, sizeof(value), 0);
+	ret = lkl_ops->iomem_access(addr, &value, sizeof(value), 0);
 	WARN(ret, "error reading iomem %p", addr);
 
 	return value;
@@ -49,7 +47,7 @@ static inline u64 __raw_readq(const volatile void __iomem *addr)
 	int ret;
 	u64 value;
 
-	ret = rumpuser_iomem_access(addr, &value, sizeof(value), 0);
+	ret = lkl_ops->iomem_access(addr, &value, sizeof(value), 0);
 	WARN(ret, "error reading iomem %p", addr);
 
 	return value;
@@ -61,7 +59,7 @@ static inline void __raw_writeb(u8 value, volatile void __iomem *addr)
 {
 	int ret;
 
-	ret = rumpuser_iomem_access(addr, &value, sizeof(value), 1);
+	ret = lkl_ops->iomem_access(addr, &value, sizeof(value), 1);
 	WARN(ret, "error writing iomem %p", addr);
 }
 
@@ -70,7 +68,7 @@ static inline void __raw_writew(u16 value, volatile void __iomem *addr)
 {
 	int ret;
 
-	ret = rumpuser_iomem_access(addr, &value, sizeof(value), 1);
+	ret = lkl_ops->iomem_access(addr, &value, sizeof(value), 1);
 	WARN(ret, "error writing iomem %p", addr);
 }
 
@@ -79,7 +77,7 @@ static inline void __raw_writel(u32 value, volatile void __iomem *addr)
 {
 	int ret;
 
-	ret = rumpuser_iomem_access(addr, &value, sizeof(value), 1);
+	ret = lkl_ops->iomem_access(addr, &value, sizeof(value), 1);
 	WARN(ret, "error writing iomem %p", addr);
 }
 
@@ -89,7 +87,7 @@ static inline void __raw_writeq(u64 value, volatile void __iomem *addr)
 {
 	int ret;
 
-	ret = rumpuser_iomem_access(addr, &value, sizeof(value), 1);
+	ret = lkl_ops->iomem_access(addr, &value, sizeof(value), 1);
 	WARN(ret, "error writing iomem %p", addr);
 }
 #endif /* CONFIG_64BIT */
@@ -97,7 +95,7 @@ static inline void __raw_writeq(u64 value, volatile void __iomem *addr)
 #define ioremap ioremap
 static inline void __iomem *ioremap(phys_addr_t offset, size_t size)
 {
-	return rumpuser_ioremap(offset, size);
+	return lkl_ops->ioremap(offset, size);
 }
 
 #include <asm-generic/io.h>

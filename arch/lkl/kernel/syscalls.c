@@ -11,8 +11,6 @@
 #include <asm/host_ops.h>
 #include <asm/syscalls.h>
 
-#include "rump.h"
-
 typedef long (*syscall_handler_t)(long arg1, ...);
 
 #undef __SYSCALL
@@ -56,7 +54,7 @@ static long run_syscall(struct syscall *s)
 	task_work_run();
 
 	if (s->sem)
-		rump_sem_up(s->sem);
+		lkl_ops->sem_up(s->sem);
 	return ret;
 }
 
@@ -79,7 +77,7 @@ int run_syscalls(void)
 	}
 
 	s->ret = 0;
-	rump_sem_up(s->sem);
+	lkl_ops->sem_up(s->sem);
 
 	return 0;
 }
@@ -109,11 +107,11 @@ long lkl_syscall(long no, long *params)
 	s.params = params;
 	s.sem = data->completion;
 
-	rump_sem_down(data->mutex);
+	lkl_ops->sem_down(data->mutex);
 	data->s = &s;
 	lkl_trigger_irq(syscall_irq, NULL);
-	rump_sem_down(data->completion);
-	rump_sem_up(data->mutex);
+	lkl_ops->sem_down(data->completion);
+	lkl_ops->sem_up(data->mutex);
 
 	return s.ret;
 }
@@ -137,8 +135,8 @@ int __init syscall_init(void)
 	struct syscall_thread_data *data = &syscall_thread_data;
 
 	init_waitqueue_head(&data->wqh);
-	data->mutex = rump_sem_alloc(1);
-	data->completion = rump_sem_alloc(0);
+	data->mutex = lkl_ops->sem_alloc(1);
+	data->completion = lkl_ops->sem_alloc(0);
 	BUG_ON(!data->mutex || !data->completion);
 
 	syscall_irq = lkl_get_free_irq("syscall");

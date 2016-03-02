@@ -7,12 +7,12 @@
 #include <linux/irq.h>
 #include <asm/host_ops.h>
 
-#include "rump.h"
-
 void __ndelay(unsigned long nsecs)
 {
-	struct timespec ts = ns_to_timespec(nsecs);
-	rumpuser_clock_sleep(RUMPUSER_CLOCK_ABSMONO, ts.tv_sec, ts.tv_nsec);
+	unsigned long long start = lkl_ops->time();
+
+	while (lkl_ops->time() < start + nsecs)
+		;
 }
 
 void __udelay(unsigned long usecs)
@@ -31,17 +31,12 @@ void calibrate_delay(void)
 
 void read_persistent_clock(struct timespec *ts)
 {
-	rumpuser_clock_gettime(RUMPUSER_CLOCK_RELWALL, (int64_t *)&ts->tv_sec,
-			       &ts->tv_nsec);
+	*ts = ns_to_timespec(lkl_ops->time());
 }
 
 static cycle_t clock_read(struct clocksource *cs)
 {
-	struct timespec ts;
-	rumpuser_clock_gettime(RUMPUSER_CLOCK_RELWALL, (int64_t *)&ts.tv_sec,
-			       &ts.tv_nsec);
-
-	return timespec_to_ns(&ts);
+	return lkl_ops->time();
 }
 
 static struct clocksource clocksource = {
@@ -64,7 +59,8 @@ static void timer_fn(void *arg)
 static int clockevent_set_state_shutdown(struct clock_event_device *evt)
 {
 	if (timer) {
-		rump_timer_cancel(timer);
+		lkl_ops->timer_free(timer);
+		timer = NULL;
 	}
 
 	return 0;
@@ -72,6 +68,10 @@ static int clockevent_set_state_shutdown(struct clock_event_device *evt)
 
 static int clockevent_set_state_oneshot(struct clock_event_device *evt)
 {
+	timer = lkl_ops->timer_alloc(timer_fn, NULL);
+	if (!timer)
+		return -ENOMEM;
+
 	return 0;
 }
 
@@ -89,9 +89,7 @@ static int clockevent_next_event(unsigned long hz,
 {
 	unsigned long ns = 1000000000 * hz / HZ;
 
-	/* FIXME: maybe will rewrite with rumpuer-based timer thread */
-	timer = rump_add_timer(ns, timer_fn, NULL);
-	return timer ? 0 : -1;
+	return lkl_ops->timer_set_oneshot(timer, ns);
 }
 
 static struct clock_event_device clockevent = {
@@ -112,6 +110,12 @@ static struct irqaction irq0  = {
 void __init time_init(void)
 {
 	int ret;
+
+	if (!lkl_ops->timer_alloc || !lkl_ops->timer_free ||
+	    !lkl_ops->timer_set_oneshot || !lkl_ops->time) {
+		pr_err("lkl: no time or timer support provided by host\n");
+		return;
+	}
 
 	timer_irq = lkl_get_free_irq("timer");
 	setup_irq(timer_irq, &irq0);
