@@ -41,6 +41,9 @@ config BIG_ENDIAN
 config NO_DMA
        def_bool y
 
+config TTY
+       def_bool n
+
 config GENERIC_CSUM
        def_bool y
 

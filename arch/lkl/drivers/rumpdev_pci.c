@@ -201,7 +201,7 @@ static int rump_trigger_irq(void *arg)
 {
 	struct irq_data *data = arg;
 
-	lkl_trigger_irq(data->irq, data);
+	lkl_trigger_irq(data->irq);
 	return 0;
 }
 

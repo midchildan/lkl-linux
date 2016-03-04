@@ -53,7 +53,7 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd e
   ifeq (,$(filter $(OUTPUT_DEF),__ANDROID__))
     LDLIBS   += -lrt -lpthread
   endif
-  export CONFIG_AUTO_LKL_POSIX_HOST=y
+  export CONFIG_AUTO_LKL_RUMP_HOST=y
 else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   KOPT      = "KALLSYMS_EXTRA_PASS=1"
   LDLIBS   += -lws2_32
@@ -136,7 +136,8 @@ else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
 else ifneq (,$(filter $(OUTPUT_FORMAT),elf32-littlearm))
   all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES)) $(ALL_PROGRAMS)
 else
-  all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
+  all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+#  all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
 endif
 
 clean:
