@@ -95,7 +95,7 @@ static inline void __raw_writeq(u64 value, volatile void __iomem *addr)
 #define ioremap ioremap
 static inline void __iomem *ioremap(phys_addr_t offset, size_t size)
 {
-	return lkl_ops->ioremap(offset, size);
+	return (void __iomem *)lkl_ops->ioremap(offset, size);
 }
 
 #include <asm-generic/io.h>
