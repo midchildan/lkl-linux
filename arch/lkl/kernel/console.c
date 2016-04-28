@@ -12,6 +12,19 @@
 
 static void console_write(struct console *con, const char *str, unsigned len)
 {
+	char buf[256];
+        static int verbose = 0;
+
+        /* when console isn't NULL (not called from file_write() */
+	if (con && !verbose &&
+            rumpuser_getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
+		if (*buf != 0)
+			verbose = 1;
+        }
+
+        if (con && !verbose)
+		return;
+
 	while (len-- > 0) {
 		rumpuser_putchar(*str);
 		str++;
