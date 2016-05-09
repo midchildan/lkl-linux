@@ -12,8 +12,8 @@
 
 static void console_write(struct console *con, const char *str, unsigned len)
 {
-	char buf[256];
-        static int verbose = 0;
+	static char buf[256];
+	static int verbose = 0;
 
         /* when console isn't NULL (not called from file_write() */
 	if (con && !verbose &&

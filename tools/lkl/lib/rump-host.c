@@ -344,6 +344,9 @@ struct lkl_host_operations lkl_host_ops = {
 extern const struct rumpuser_hyperup rumpns_hyp;
 #define LKL_MEM_SIZE 100 * 1024 * 1024
 char *boot_cmdline = "";	/* FIXME: maybe we have rump_set_boot_cmdline? */
+static char buf[256];
+static int verbose;
+
 int rump_init(void)
 {
 	if (rumpuser_init(RUMPUSER_VERSION, &rumpns_hyp) != 0) {
@@ -363,18 +366,58 @@ int rump_init(void)
 #ifdef ENABLE_SYSPROXY
 	rump_sysproxy_init();
 #endif
-	rumpuser_dprintf("rumpuser started.\n");
+	if (rumpuser_getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
+		if (*buf != 0)
+			verbose = 1;
+	}
+
+	if (verbose)
+		rumpuser_dprintf("rumpuser started.\n");
 	return 0;
 }
 
 void rump_exit(void)
 {
-	rumpuser_dprintf("rumpuser finishing.\n");
+	if (verbose)
+		rumpuser_dprintf("rumpuser finishing.\n");
+
 #ifdef ENABLE_SYSPROXY
 	rump_sysproxy_fini();
 #endif
 	rumpuser_exit(0);
 }
+
+/* stub calls */
+#define RUMP_TEMP_STUB
+#ifdef RUMP_TEMP_STUB
+enum rump_etfs_type {
+	RUMP_ETFS_REG,
+	RUMP_ETFS_BLK,
+	RUMP_ETFS_CHR,
+	RUMP_ETFS_DIR,
+	RUMP_ETFS_DIR_SUBDIRS
+};
+
+void rump_boot_setsigmodel(int rump_sigmodel){}
+int rump_pub_etfs_register(const char *key, const char *hostpath, enum rump_etfs_type ftype){return 0;}
+int rump_pub_etfs_register_withsize(const char *key, const char *hostpath,
+	enum rump_etfs_type ftype, uint64_t begin, uint64_t size) {return 0;}
+int rump___sysimpl_mount50(const char *str, const char *str2, int i, void *p, size_t s){return 0;}
+
+int rump___sysimpl_dup2(int i, int j)
+{
+	return 0;
+	return lkl_sys_dup2(i, j);
+}
+int rump___sysimpl_socket30(int i, int j, int k){return 0;}
+int rump___sysimpl_unmount(const char *str, int i){return 0;}
+void __assert13(const char *file, int line, const char *function, const char *failedexpr){}
+int rump___sysimpl_close(int fd) {return -1;}
+int rump___sysimpl_ioctl(int fd, u_long com, void * data) {return -1;}
+int rump___sysimpl_mkdir(const char * path, mode_t mode) {return -1;}
+int rump___sysimpl_open(const char *name, int flags, ...) {return -1;}
+
+#endif /* RUMP_TEMP_STUB */
 
 /* FIXME */
 static __inline long __syscall3(long n, long a1, long a2, long a3)
