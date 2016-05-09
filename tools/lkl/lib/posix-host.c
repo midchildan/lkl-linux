@@ -5,7 +5,6 @@
 #include <signal.h>
 #include <assert.h>
 #include <unistd.h>
-#include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <time.h>
@@ -54,13 +53,17 @@ struct lkl_sem_t {
 			lkl_printf("%s: %s\n", #exp, strerror(errno));	\
 	} while (0)
 
-/* pthread_* functions use the reverse convention */
-#define WARN_PTHREAD(exp) do {						\
-		int __ret = exp;					\
-		if (__ret > 0)						\
-			lkl_printf("%s: %s\n", #exp, strerror(__ret));	\
-	} while (0)
+static int _warn_pthread(int ret, char *str_exp)
+{
+	if (ret > 0)
+		lkl_printf("%s: %s\n", str_exp, strerror(ret));
 
+	return ret;
+}
+
+
+/* pthread_* functions use the reverse convention */
+#define WARN_PTHREAD(exp) _warn_pthread(exp, #exp)
 
 static struct lkl_sem_t *sem_alloc(int count)
 {
@@ -87,6 +90,12 @@ static struct lkl_sem_t *sem_alloc(int count)
 
 static void sem_free(struct lkl_sem_t *sem)
 {
+#ifdef _POSIX_SEMAPHORES
+	WARN_UNLESS(sem_destroy(&sem->sem));
+#else
+	WARN_PTHREAD(pthread_cond_destroy(&sem->cond));
+	WARN_PTHREAD(pthread_mutex_destroy(&sem->lock));
+#endif /* _POSIX_SEMAPHORES */
 	free(sem);
 }
 
@@ -177,16 +186,31 @@ static void mutex_free(struct lkl_mutex_t *_mutex)
 	free(_mutex);
 }
 
-static int thread_create(void (*fn)(void *), void *arg)
+static lkl_thread_t thread_create(void (*fn)(void *), void *arg)
 {
 	pthread_t thread;
+	if (WARN_PTHREAD(pthread_create(&thread, NULL, (void* (*)(void *))fn, arg)))
+		return 0;
+	else
+		return (lkl_thread_t) thread;
+}
 
-	return pthread_create(&thread, NULL, (void* (*)(void *))fn, arg);
+static void thread_detach(void)
+{
+	WARN_PTHREAD(pthread_detach(pthread_self()));
 }
 
 static void thread_exit(void)
 {
 	pthread_exit(NULL);
+}
+
+static int thread_join(lkl_thread_t tid)
+{
+	if (WARN_PTHREAD(pthread_join(tid, NULL)))
+		return -1;
+	else
+		return 0;
 }
 
 static int tls_alloc(unsigned int *key)
@@ -208,7 +232,6 @@ static void *tls_get(unsigned int key)
 {
 	return pthread_getspecific(key);
 }
-
 
 static unsigned long long time_ns(void)
 {
@@ -274,7 +297,9 @@ static long _gettid(void)
 struct lkl_host_operations lkl_host_ops = {
 	.panic = panic,
 	.thread_create = thread_create,
+	.thread_detach = thread_detach,
 	.thread_exit = thread_exit,
+	.thread_join = thread_join,
 	.sem_alloc = sem_alloc,
 	.sem_free = sem_free,
 	.sem_up = sem_up,
@@ -377,58 +402,5 @@ static int blk_request(union lkl_disk disk, struct lkl_blk_req *req)
 struct lkl_dev_blk_ops lkl_dev_blk_ops = {
 	.get_capacity = fd_get_capacity,
 	.request = blk_request,
-};
-
-static int net_tx(union lkl_netdev nd, void *data, int len)
-{
-	int ret;
-
-	ret = write(nd.fd, data, len);
-	if (ret <= 0 && errno == -EAGAIN)
-		return -1;
-	return 0;
-}
-
-static int net_rx(union lkl_netdev nd, void *data, int *len)
-{
-	int ret;
-
-	ret = read(nd.fd, data, *len);
-	if (ret <= 0)
-		return -1;
-	*len = ret;
-	return 0;
-}
-
-static int net_poll(union lkl_netdev nd, int events)
-{
-	struct pollfd pfd = {
-		.fd = nd.fd,
-	};
-	int ret = 0;
-
-	if (events & LKL_DEV_NET_POLL_RX)
-		pfd.events |= POLLIN | POLLPRI;
-	if (events & LKL_DEV_NET_POLL_TX)
-		pfd.events |= POLLOUT;
-
-	while (poll(&pfd, 1, -1) < 0 && errno == EINTR)
-		;
-
-	if (pfd.revents & (POLLHUP | POLLNVAL))
-		return -1;
-
-	if (pfd.revents & POLLIN)
-		ret |= LKL_DEV_NET_POLL_RX;
-	if (pfd.revents & POLLOUT)
-		ret |= LKL_DEV_NET_POLL_TX;
-
-	return ret;
-}
-
-struct lkl_dev_net_ops lkl_dev_net_ops = {
-	.tx = net_tx,
-	.rx = net_rx,
-	.poll = net_poll,
 };
 

@@ -14,6 +14,10 @@
 #define NUM_QUEUES (TX_QUEUE_IDX + 1)
 #define QUEUE_DEPTH 32
 
+/* In fact, we'll hit the limit on the devs string below long before
+ * we hit this, but it's good enough for now. */
+#define MAX_NET_DEVS 16
+
 #ifdef DEBUG
 #define bad_request(s) do {			\
 		lkl_printf("%s\n", s);		\
@@ -22,7 +26,6 @@
 #else
 #define bad_request(s) lkl_printf("virtio_net: %s\n", s);
 #endif /* DEBUG */
-
 
 struct virtio_net_poll {
 	struct virtio_net_dev *dev;
@@ -33,7 +36,7 @@ struct virtio_net_dev {
 	struct virtio_dev dev;
 	struct lkl_virtio_net_config config;
 	struct lkl_dev_net_ops *ops;
-	union lkl_netdev nd;
+	struct lkl_netdev *nd;
 	struct virtio_net_poll rx_poll, tx_poll;
 	struct lkl_mutex_t **queue_locks;
 };
@@ -130,6 +133,22 @@ void poll_thread(void *arg)
 }
 
 void franken_recv_thread(int fd, void *thrid);
+struct virtio_net_dev *registered_devs[MAX_NET_DEVS];
+static int registered_dev_idx = 0;
+
+static int dev_register(struct virtio_net_dev *dev)
+{
+	if (registered_dev_idx == MAX_NET_DEVS) {
+		lkl_printf("Too many virtio_net devices!\n");
+		/* This error code is a little bit of a lie */
+		return -LKL_ENOMEM;
+	} else {
+		/* registered_dev_idx is incremented by the caller */
+		registered_devs[registered_dev_idx] = dev;
+		return 0;
+	}
+}
+
 static void free_queue_locks(struct lkl_mutex_t **queues, int num_queues)
 {
 	int i = 0;
@@ -137,7 +156,7 @@ static void free_queue_locks(struct lkl_mutex_t **queues, int num_queues)
 		return;
 
 	for (i = 0; i < num_queues; i++)
-		lkl_host_ops.mem_free(queues[i]);
+		lkl_host_ops.mutex_free(queues[i]);
 
 	lkl_host_ops.mem_free(queues);
 }
@@ -161,10 +180,9 @@ static struct lkl_mutex_t **init_queue_locks(int num_queues)
 	return ret;
 }
 
-int lkl_netdev_add(union lkl_netdev nd, void *mac)
+int lkl_netdev_add(struct lkl_netdev *nd, void *mac)
 {
 	struct virtio_net_dev *dev;
-	static int count;
 	int ret = -LKL_ENOMEM;
 
 	dev = lkl_host_ops.mem_alloc(sizeof(*dev));
@@ -179,7 +197,7 @@ int lkl_netdev_add(union lkl_netdev nd, void *mac)
 	dev->dev.config_data = &dev->config;
 	dev->dev.config_len = sizeof(dev->config);
 	dev->dev.ops = &net_ops;
-	dev->ops = &lkl_dev_net_ops;
+	dev->ops = nd->ops;
 	dev->nd = nd;
 	dev->queue_locks = init_queue_locks(NUM_QUEUES);
 
@@ -204,20 +222,33 @@ int lkl_netdev_add(union lkl_netdev nd, void *mac)
 	if (ret)
 		goto out_free;
 
-	void *thrid;
-
-	if (lkl_host_ops.thread_create(poll_thread, &dev->rx_poll, &thrid) < 0)
+	nd->rx_tid = lkl_host_ops.thread_create(poll_thread, &dev->rx_poll);
+	if (nd->rx_tid == 0)
 		goto out_cleanup_dev;
 
 	/* XXX: only for rump: need to use this semantics for franken_poll(2) */
-	franken_recv_thread(nd.fd, thrid);
+	{
 
-	if (lkl_host_ops.thread_create(poll_thread, &dev->tx_poll, NULL) < 0)
+		struct lkl_netdev_rumpfd {
+			struct lkl_netdev dev;
+			/* TAP device */
+			int fd;
+		};
+
+		struct lkl_netdev_rumpfd *nd_rumpfd =
+			container_of(nd, struct lkl_netdev_rumpfd, dev);
+		franken_recv_thread(nd_rumpfd->fd, (void *)nd->rx_tid);
+	}
+
+	nd->tx_tid = lkl_host_ops.thread_create(poll_thread, &dev->tx_poll);
+	if (nd->tx_tid == 0)
 		goto out_cleanup_dev;
 
-	/* RX/TX thread polls will exit when the host netdev handle is closed */
+	ret = dev_register(dev);
+	if (ret < 0)
+		goto out_cleanup_dev;
 
-	return count++;
+	return registered_dev_idx++;
 
 out_cleanup_dev:
 	virtio_dev_cleanup(&dev->dev);
@@ -228,4 +259,41 @@ out_free:
 	lkl_host_ops.mem_free(dev);
 
 	return ret;
+}
+
+/* Return 0 for success, -1 for failure. */
+static int lkl_netdev_remove(struct virtio_net_dev *dev)
+{
+	if (!dev->nd->ops->close)
+		/* Can't kill the poll threads, so we can't do
+		 * anything safely. */
+		return -1;
+
+	if (dev->nd->ops->close(dev->nd) < 0)
+		/* Something went wrong */
+		return -1;
+
+	virtio_dev_cleanup(&dev->dev);
+
+	lkl_host_ops.mem_free(dev->nd);
+	free_queue_locks(dev->queue_locks, NUM_QUEUES);
+	lkl_host_ops.mem_free(dev);
+
+	return 0;
+}
+
+int lkl_netdevs_remove(void)
+{
+	int i = 0, failure_count = 0;
+
+	for (; i < registered_dev_idx; i++)
+		failure_count -= lkl_netdev_remove(registered_devs[i]);
+
+	if (failure_count) {
+		lkl_printf("WARN: failed to free %d of %d netdevs.\n",
+			failure_count, registered_dev_idx);
+		return -1;
+	}
+
+	return 0;
 }

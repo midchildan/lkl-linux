@@ -54,6 +54,23 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd e
     LDLIBS   += -lrt -lpthread
   endif
   export CONFIG_AUTO_LKL_RUMP_HOST=y
+
+  # Intel DPDK configuration
+  ifeq ($(dpdk),yes)
+    export CONFIG_AUTO_LKL_VIRTIO_NET_DPDK=y
+    RTE_SDK ?= $(shell pwd)/dpdk-2.2.0
+    RTE_TARGET ?= build
+    CFLAGS += -I$(RTE_SDK)/$(RTE_TARGET)/include -msse4.2 -mpopcnt
+    CFLAGS += -DCONFIG_AUTO_LKL_VIRTIO_NET_DPDK
+    LDFLAGS +=-L$(RTE_SDK)/$(RTE_TARGET)/lib
+    LDFLAGS +=-Wl,--whole-archive -ldpdk -Wl,--no-whole-archive -lm -ldl
+  endif
+  # Virtual Distributed Ethernet configuration
+  ifeq ($(vde),yes)
+    export CONFIG_AUTO_LKL_VIRTIO_NET_VDE=y
+    CFLAGS     += -DCONFIG_AUTO_LKL_VIRTIO_NET_VDE
+    LDLIBS     += $(shell pkg-config --libs vdeplug)
+  endif
 else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   KOPT      = "KALLSYMS_EXTRA_PASS=1"
   LDLIBS   += -lws2_32
@@ -102,7 +119,8 @@ endif
 TEST_TARGETS        := test valgrind gdb
 
 tests/boot: tests/boot-in.o liblkl.a
-$(TEST_TARGETS): tests/boot
+tests/net-test: tests/net-test-in.o liblkl.a
+$(TEST_TARGETS): tests/boot tests/net-test
 
 # because of libdl, liblkl-hijack will not compile on windows
 # fortunately, the test target will handle a missing libhijack.so correctly
@@ -120,7 +138,7 @@ lib/lkl.o:
 liblkl.a: lib/lkl-in.o lib/lkl.o
 	$(QUIET_AR)$(AR) -rc $@ $^
 
-liblkl$(SOSUF) liblkl-hijack$(SOSUF) lklfuse$(EXESUF) fs2tar$(EXESUF) cptofs$(EXESUF) tests/boot:
+liblkl$(SOSUF) liblkl-hijack$(SOSUF) lklfuse$(EXESUF) fs2tar$(EXESUF) cptofs$(EXESUF) tests/boot tests/net-test:
 	$(QUIET_LINK)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 cpfromfs$(EXESUF): cptofs$(EXESUF)
@@ -146,7 +164,7 @@ clean:
 	$(call QUIET_CLEAN, "host libraries")$(RM) liblkl.a liblkl$(SOSUF)
 	$(call QUIET_CLEAN, "hijack library")$(RM) liblkl-hijack$(SOSUF)
 	$(call QUIET_CLEAN, programs)$(RM) lklfuse$(EXESUF) fs2tar$(EXESUF) cptofs$(EXESUF) cpfromfs$(EXESUF)
-	$(call QUIET_CLEAN, tests)$(RM) tests/boot
+	$(call QUIET_CLEAN, tests)$(RM) tests/boot tests/net-test
 
 $(TEST_TARGETS):
 	$(MAKE) -C tests $@

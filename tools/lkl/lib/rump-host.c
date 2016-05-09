@@ -30,6 +30,9 @@
 /* FIXME */
 #include <../franken/thread/thread.h>
 
+#define container_of(ptr, type, member) \
+	(type *)((char *)(ptr) - __builtin_offsetof(type, member))
+
 /* FIXME */
 int *__errno(void);
 #undef errno
@@ -152,18 +155,22 @@ static void rump_mem_free(void *mem)
 }
 
 /* thread */
-static int thread_create(void (*fn)(void *), void *arg, void **thr)
+static lkl_thread_t thread_create(void (*fn)(void *), void *arg)
 {
 	void *thrid;
 	int ret;
 
 	ret = rumpuser_thread_create((void * (*)(void *))fn, arg,
 				     "lkl_thr", 0, 1, -1, &thrid);
+	if (ret)
+		return 0;
 
-	if (thr)
-		*thr = thrid;
+	return (lkl_thread_t) thrid;
+}
 
-	return ret;
+static void thread_detach(void)
+{
+	/* NOP */
 }
 
 static void thread_exit(void)
@@ -318,6 +325,7 @@ extern char lkl_virtio_devs[];
 struct lkl_host_operations lkl_host_ops = {
 	.panic = panic,
 	.thread_create = thread_create,
+	.thread_detach = thread_detach,
 	.thread_exit = thread_exit,
 	.sem_alloc = rump_sem_alloc,
 	.sem_free = rump_sem_free,
@@ -495,31 +503,43 @@ struct lkl_dev_blk_ops lkl_dev_blk_ops = {
 	.request = blk_request,
 };
 
-static int net_tx(union lkl_netdev nd, void *data, int len)
+struct lkl_netdev_rumpfd {
+	struct lkl_netdev dev;
+	/* TAP device */
+	int fd;
+};
+
+static int net_tx(struct lkl_netdev *nd, void *data, int len)
 {
+	struct lkl_netdev_rumpfd *nd_rumpfd =
+		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	int ret;
 
-	ret = write(nd.fd, data, len);
+	ret = write(nd_rumpfd->fd, data, len);
 	if (ret <= 0 && errno == -EAGAIN)
 		return -1;
 	return 0;
 }
 
-static int net_rx(union lkl_netdev nd, void *data, int *len)
+static int net_rx(struct lkl_netdev *nd, void *data, int *len)
 {
+	struct lkl_netdev_rumpfd *nd_rumpfd =
+		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	int ret;
 
-	ret = read(nd.fd, data, *len);
+	ret = read(nd_rumpfd->fd, data, *len);
 	if (ret <= 0)
 		return -1;
 	*len = ret;
 	return 0;
 }
 
-static int net_poll(union lkl_netdev nd, int events)
+static int net_poll(struct lkl_netdev *nd, int events)
 {
+	struct lkl_netdev_rumpfd *nd_rumpfd =
+		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	struct pollfd pfd = {
-		.fd = nd.fd,
+		.fd = nd_rumpfd->fd,
 	};
 	int ret = 0;
 
@@ -552,9 +572,24 @@ static int net_poll(union lkl_netdev nd, int events)
 	return ret;
 }
 
-struct lkl_dev_net_ops lkl_dev_net_ops = {
+struct lkl_dev_net_ops rumpfd_ops = {
 	.tx = net_tx,
 	.rx = net_rx,
 	.poll = net_poll,
 };
 
+struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd)
+{
+	struct lkl_netdev_rumpfd *nd;
+
+	nd = (struct lkl_netdev_rumpfd *)
+		malloc(sizeof(struct lkl_netdev_rumpfd));
+	if (!nd) {
+		fprintf(stderr, "tap: failed to allocate memory\n");
+		return NULL;
+	}
+
+	nd->fd = fd;
+	nd->dev.ops = &rumpfd_ops;
+	return (struct lkl_netdev *)nd;
+}

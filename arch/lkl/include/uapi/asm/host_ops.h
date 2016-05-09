@@ -4,6 +4,7 @@
 /* Defined in {posix,nt}-host.c */
 struct lkl_mutex_t;
 struct lkl_sem_t;
+typedef unsigned long lkl_thread_t;
 
 /**
  * lkl_host_operations - host operations used by the Linux kernel
@@ -31,8 +32,12 @@ struct lkl_sem_t;
  * @mutex_unlock - release the mutex
  *
  * @thread_create - create a new thread and run f(arg) in its context; returns a
- * thread handle or NULL if the thread could not be created
+ * thread handle or 0 if the thread could not be created
+ * @thread_detach - on POSIX systems, free up resources held by
+ * pthreads. Noop on Win32.
  * @thread_exit - terminates the current thread
+ * @thread_join - wait for the given thread to terminate. Returns 0
+ * for success, -1 otherwise
  *
  * @tls_alloc - allocate a thread local storage key; returns 0 if succesful
  * @tls_free - frees a thread local storage key; returns 0 if succesful
@@ -55,7 +60,8 @@ struct lkl_sem_t;
  * @iomem_acess - reads or writes to and I/O memory region; addr must be in the
  * range returned by ioremap
  *
- * @gettid - returns the host thread id of the caller
+ * @gettid - returns the host thread id of the caller, which need not
+ * be the same as the handle returned by thread_create
  */
 struct lkl_host_operations {
 	const char *virtio_devices;
@@ -74,8 +80,10 @@ struct lkl_host_operations {
 	void (*mutex_lock)(struct lkl_mutex_t *mutex);
 	void (*mutex_unlock)(struct lkl_mutex_t *mutex);
 
-	int (*thread_create)(void (*f)(void *), void *arg, void **thr);
+	lkl_thread_t (*thread_create)(void (*f)(void *), void *arg);
+	void (*thread_detach)(void);
 	void (*thread_exit)(void);
+	int (*thread_join)(lkl_thread_t tid);
 
 	int (*tls_alloc)(unsigned int *key);
 	int (*tls_free)(unsigned int key);
@@ -109,7 +117,7 @@ struct lkl_host_operations {
  * generate the Linux kernel command line
  */
 int lkl_start_kernel(struct lkl_host_operations *lkl_ops,
-		     unsigned long mem_size,
-		     const char *cmd_line, ...);
+		    unsigned long mem_size,
+		    const char *cmd_line, ...);
 
 #endif

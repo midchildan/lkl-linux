@@ -17,9 +17,7 @@
 #include <windows.h>
 #endif
 
-#define TEST_SUCCESS 1
-#define TEST_FAILURE 0
-#define MAX_MSG_LEN 60
+#include "test.h"
 
 static struct cl_args {
 	int printk;
@@ -70,24 +68,6 @@ void printk(const char *str, int len)
 	if (cla.printk)
 		ret = write(STDOUT_FILENO, str, len);
 }
-
-static int g_test_pass = 0;
-#define TEST(name) {				\
-	int ret = do_test(#name, test_##name);	\
-	if (!ret) g_test_pass = -1;		\
-	}
-
-static int do_test(char *name, int (*fn)(char *, int))
-{
-	char str[MAX_MSG_LEN];
-	int result;
-
-	result = fn(str, sizeof(str));
-	printf("%-20s %s [%s]\n", name,
-		result == TEST_SUCCESS ? "passed" : "failed", str);
-	return result;
-}
-
 
 #ifndef __MINGW32__
 
@@ -345,32 +325,21 @@ static int netdev_id = -1;
 
 int test_netdev_add(char *str, int len)
 {
-	union lkl_netdev netdev = { -1, };
-	struct ifreq ifr = {
-		.ifr_flags = IFF_TAP | IFF_NO_PI,
-	};
-	int ret;
+	struct lkl_netdev *netdev;
+	int ret = 0;
 
-	strncpy(ifr.ifr_name, cla.tap_ifname, IFNAMSIZ);
-
-	ret = open("/dev/net/tun", O_RDWR|O_NONBLOCK);
-	if (ret < 0)
+	netdev = lkl_netdev_tap_create(cla.tap_ifname);
+	if (!netdev)
 		goto out;
 
-	netdev.fd = ret;
-
-	ret = ioctl(netdev.fd, TUNSETIFF, &ifr);
-	if (ret < 0)
-		goto out;
-
-	ret = lkl_netdev_add(netdev, NULL);
+	ret = lkl_netdev_add((struct lkl_netdev *)netdev, NULL);
 	if (ret < 0)
 		goto out;
 
 	netdev_id = ret;
 
 out:
-	snprintf(str, len, "%d %d %d", ret, netdev.fd, netdev_id);
+	snprintf(str, len, "%d %p %d", ret, netdev, netdev_id);
 	return ret >= 0 ? TEST_SUCCESS : TEST_FAILURE;
 }
 
@@ -672,19 +641,9 @@ static void test_thread(void *data)
 	char tmp[LKL_PIPE_BUF+1];
 	int ret;
 
-	ret = lkl_create_syscall_thread();
-	if (ret < 0) {
-		fprintf(stderr, "%s: %s\n", __func__, lkl_strerror(ret));
-	}
-
 	ret = lkl_sys_read(pipe_fds[0], tmp, sizeof(tmp));
 	if (ret < 0) {
 		fprintf(stderr, "%s: %s\n", __func__, lkl_strerror(ret));
-	}
-
-	ret = lkl_stop_syscall_thread();
-	if (ret < 0) {
-		fprintf(stderr, "%s: %s %d\n", __func__, lkl_strerror(ret), ret);
 	}
 
 }
@@ -708,12 +667,10 @@ static int test_syscall_thread(char *str, int len)
 	}
 
 	ret = lkl_host_ops.thread_create(test_thread, pipe_fds);
-	if (ret) {
+	if (!ret) {
 		snprintf(str, len, "failed to create thread");
 		return TEST_FAILURE;
 	}
-
-	sleep(1);
 
 	ret = lkl_sys_write(pipe_fds[1], tmp, sizeof(tmp));
 	if (ret != sizeof(tmp)) {
@@ -724,9 +681,25 @@ static int test_syscall_thread(char *str, int len)
 		return TEST_FAILURE;
 	}
 
-	sleep(1);
-
 	return TEST_SUCCESS;
+}
+
+void thread_quit_immediately(void *unused)
+{
+}
+
+static int test_join(char *str, int len)
+{
+	lkl_thread_t tid = lkl_host_ops.thread_create(thread_quit_immediately, NULL);
+	int ret = lkl_host_ops.thread_join(tid);
+
+	if (ret == 0) {
+		snprintf(str, len, "joined %ld", tid);
+		return TEST_SUCCESS;
+	} else {
+		snprintf(str, len, "failed joining %ld", tid);
+		return TEST_FAILURE;
+	}
 }
 
 static struct cl_option *find_short_opt(char name)
@@ -837,6 +810,7 @@ int main(int argc, char **argv)
 	TEST(semaphore);
 	TEST(gettid);
 	TEST(syscall_thread);
+	TEST(join);
 
 	lkl_sys_halt();
 

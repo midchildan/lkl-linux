@@ -17,7 +17,7 @@ extern struct lkl_host_operations lkl_host_ops;
  */
 int lkl_printf(const char *fmt, ...);
 
-char lkl_virtio_devs[256];
+extern char lkl_virtio_devs[256];
 
 struct lkl_dev_buf {
 	void *addr;
@@ -47,14 +47,71 @@ struct lkl_dev_blk_ops {
 	int (*request)(union lkl_disk disk, struct lkl_blk_req *req);
 };
 
-extern struct lkl_dev_net_ops lkl_dev_net_ops;
+struct lkl_netdev {
+	struct lkl_dev_net_ops *ops;
+	lkl_thread_t rx_tid, tx_tid;
+};
 
 struct lkl_dev_net_ops {
-	int (*tx)(union lkl_netdev nd, void *data, int len);
-	int (*rx)(union lkl_netdev nd, void *data, int *len);
+	/* Writes a L2 packet into the net device.
+	 *
+	 * The data buffer can only hold 0 or 1 complete packets.
+	 *
+	 * @nd - pointer to the network device
+	 * @data - pointer to the buffer
+	 * @len - size of the buffer in bytes
+	 * @returns 0 for success and -1 for failure.
+	 */ 
+	int (*tx)(struct lkl_netdev *nd, void *data, int len);
+	/* Reads a packet from the net device.
+	 *
+	 * It must only read one complete packet if present.
+	 *
+	 * If the buffer is too small for the packet, the implementation may
+	 * decide to drop it or trim it.
+	 *
+	 * @nd - pointer to the network device
+	 * @data - pointer to the buffer to store the packet
+	 * @len - pointer to the maximum size of the buffer. Also stores the
+	 * real number of bytes read after return.
+	 * @returns 0 for success and -1 if nothing is read.
+	 */ 
+	int (*rx)(struct lkl_netdev *nd, void *data, int *len);
 #define LKL_DEV_NET_POLL_RX		1
 #define LKL_DEV_NET_POLL_TX		2
-	int (*poll)(union lkl_netdev nd, int events);
+	/* Polls a net device.
+	 *
+	 * Supports only one of two events: LKL_DEV_NET_POLL_RX (readable) and
+	 * LKL_DEV_NET_POLL_TX (writable). Blocks until one event is available.
+	 *
+	 * Implementation can assume only one of LKL_DEV_NET_POLL_RX or
+	 * LKL_DEV_NET_POLL_TX is set in @events.
+	 *
+	 * Both LKL_DEV_NET_POLL_RX and LKL_DEV_NET_POLL_TX can be
+	 * level-triggered or edge-triggered. When it's level-triggered,
+	 * rx/tx thread can become a busy waiting loop which burns out CPU.
+	 * This is more of a problem for tx, because LKL_DEV_NET_POLL_TX event
+	 * is present most of the time.
+	 *
+	 * @nd - pointer to the network device
+	 * @events - a bit mask specifying the events to poll on. Only one of
+	 * LKL_DEV_NET_POLL_RX or LKL_DEV_NET_POLL_TX is set.
+	 * @returns the events triggered for success. -1 for failure.
+	 */
+	int (*poll)(struct lkl_netdev *nd, int events);
+	/* Closes a net device.
+	 *
+	 * Implementation can choose to release any resources releated to it. In
+	 * particular, the polling threads are to be killed in this function.
+	 *
+	 * Implemenation must guarantee it's safe to call free_mem() after this
+	 * function call.
+	 *
+	 * Not implemented by all netdev types.
+	 *
+	 * @returns 0 for success. -1 for failure.
+	 */
+	int (*close)(struct lkl_netdev *nd);
 };
 
 #ifdef __cplusplus

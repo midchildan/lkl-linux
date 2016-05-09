@@ -1,5 +1,3 @@
-
-
 /*
  * system calls hijack code
  * Copyright (c) 2015 Hajime Tazaki
@@ -27,6 +25,10 @@
 #include <lkl_host.h>
 
 #include "xlate.h"
+#include "../virtio_net_tap.h"
+
+#define __USE_GNU
+#include <dlfcn.h>
 
 /* Mount points are named after filesystem types so they should never
  * be longer than ~6 characters. */
@@ -123,7 +125,7 @@ static int mount_fs(char *fstype)
 
 static void mount_cmds_exec(char *_cmds, int (*callback)(char*))
 {
-	char *saveptr, *token;
+	char *saveptr = NULL, *token;
 	int ret = 0;
 	char *cmds = strdup(_cmds);
 	token = strtok_r(cmds, ",", &saveptr);
@@ -139,65 +141,69 @@ static void mount_cmds_exec(char *_cmds, int (*callback)(char*))
 	free(cmds);
 }
 
-int init_tap(char *tap, char *mac_str)
+void fixup_netdev_tap_ops(void)
 {
-	struct ifreq ifr = {
-		.ifr_flags = IFF_TAP | IFF_NO_PI,
-	};
-	union lkl_netdev nd;
-	__lkl__u8 mac[LKL_ETH_ALEN] = {0};
-	int ret = -1;
-
-	strncpy(ifr.ifr_name, tap, IFNAMSIZ);
-
-	nd.fd = open("/dev/net/tun", O_RDWR|O_NONBLOCK);
-	if (nd.fd < 0) {
-		fprintf(stderr, "failed to open tap: %s\n", strerror(errno));
-		return -1;
-	}
-
-	ret = ioctl(nd.fd, TUNSETIFF, &ifr);
-	if (ret < 0) {
-		fprintf(stderr, "failed to attach to %s: %s\n",
-			ifr.ifr_name, strerror(errno));
-		return -1;
-	}
-
-	ret = parse_mac_str(mac_str, mac);
-
-	if (ret < 0) {
-		fprintf(stderr, "failed to parse mac\n");
-		return -1;
-	} else if (ret > 0) {
-		ret = lkl_netdev_add(nd, mac);
-	} else {
-		ret = lkl_netdev_add(nd, NULL);
-	}
-
-	if (ret < 0) {
-		fprintf(stderr, "failed to add netdev: %s\n",
-			lkl_strerror(ret));
-		return -1;
-	}
-
-	return ret;
+	/* It's okay if this is NULL, because then netdev close will
+	 * fall back onto an uncloseable implementation. */
+	lkl_netdev_tap_ops.eventfd = dlsym(RTLD_NEXT, "eventfd");
 }
 
 void __attribute__((constructor(102)))
 hijack_init(void)
 {
 	int ret, i, dev_null, nd_id = -1, nd_ifindex = -1;
+	/* OBSOLETE: should use IFTYPE and IFPARAMS */
 	char *tap = getenv("LKL_HIJACK_NET_TAP");
+	char *iftype = getenv("LKL_HIJACK_NET_IFTYPE");
+	char *ifparams = getenv("LKL_HIJACK_NET_IFPARAMS");
 	char *mtu_str = getenv("LKL_HIJACK_NET_MTU");
+	__lkl__u8 mac[LKL_ETH_ALEN] = {0};
 	char *ip = getenv("LKL_HIJACK_NET_IP");
 	char *mac_str = getenv("LKL_HIJACK_NET_MAC");
 	char *netmask_len = getenv("LKL_HIJACK_NET_NETMASK_LEN");
 	char *gateway = getenv("LKL_HIJACK_NET_GATEWAY");
 	char *debug = getenv("LKL_HIJACK_DEBUG");
 	char *mount = getenv("LKL_HIJACK_MOUNT");
+	struct lkl_netdev *nd = NULL;
+
+	/* Must be run before lkl_netdev_tap_create */
+	fixup_netdev_tap_ops();
 
 	if (tap) {
-		nd_id = init_tap(tap, mac_str);
+		fprintf(stderr,
+			"WARN: variable LKL_HIJACK_NET_TAP is now obsoleted.\n"
+			"      please use LKL_HIJACK_NET_IFTYPE and "
+			"LKL_HIJACK_NET_IFPARAMS instead.\n");
+		nd = lkl_netdev_tap_create(tap);
+	}
+
+	if (!nd && iftype && ifparams) {
+		if ((strcmp(iftype, "tap") == 0))
+			nd = lkl_netdev_tap_create(ifparams);
+		else if (strcmp(iftype, "dpdk") == 0)
+			nd = lkl_netdev_dpdk_create(ifparams);
+		else if (strcmp(iftype, "vde") == 0)
+			nd = lkl_netdev_vde_create(ifparams);
+	}
+
+	if (nd) {
+		ret = parse_mac_str(mac_str, mac);
+
+		if (ret < 0) {
+			fprintf(stderr, "failed to parse mac\n");
+			return;
+		} else if (ret > 0) {
+			ret = lkl_netdev_add(nd, mac);
+		} else {
+			ret = lkl_netdev_add(nd, NULL);
+		}
+
+		if (ret < 0) {
+			fprintf(stderr, "failed to add netdev: %s\n",
+				lkl_strerror(ret));
+			return;
+		}
+		nd_id = ret;
 	}
 
 	if (!debug)

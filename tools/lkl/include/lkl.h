@@ -209,13 +209,9 @@ int lkl_if_set_ipv4(int ifindex, unsigned int addr, unsigned int netmask_len);
 int lkl_set_ipv4_gateway(unsigned int addr);
 
 /**
- * lkl_netdev - host network device handle
- *
- * @fd - TAP device or packet socket file descriptor
+ * lkl_netdev - host network device handle, defined in lkl_host.h.
  */
-union lkl_netdev {
-	int fd;
-};
+struct lkl_netdev;
 
 /**
  * lkl_netdev_add - add a new network device
@@ -227,7 +223,18 @@ union lkl_netdev {
  * @returns a network device id (0 is valid) or a strictly negative value in
  * case of error
  */
-int lkl_netdev_add(union lkl_netdev nd, void *mac);
+int lkl_netdev_add(struct lkl_netdev *nd, void *mac);
+
+/**
+* lkl_netdevs_remove - destroy all network devices
+*
+* Attempts to release all resources held by network devices created
+* via lkl_netdev_add.
+*
+* @returns 0 if all devices are successfully removed, -1 if at least
+* one fails.
+*/
+int lkl_netdevs_remove(void);
 
 /**
  * lkl_netdev_get_ifindex - retrieve the interface index for a given network
@@ -254,7 +261,31 @@ int lkl_create_syscall_thread(void);
  *
  * Stop the system call thread associated with this host thread, if any.
  */
-int lkl_stop_syscall_thread();
+int lkl_stop_syscall_thread(void);
+
+/**
+ * lkl_netdev_tap_create - create TAP net_device for the virtio net backend
+ *
+ * @ifname - interface name for the TAP device. need to be configured
+ * on host in advance
+ */
+struct lkl_netdev *lkl_netdev_tap_create(const char *ifname);
+
+/**
+ * lkl_netdev_dpdk_create - create DPDK net_device for the virtio net backend
+ *
+ * @ifname - interface name for the DPDK device. The name for DPDK device is
+ * only used for an internal use.
+ */
+struct lkl_netdev *lkl_netdev_dpdk_create(const char *ifname);
+
+/**
+ * lkl_netdev_vde_create - create VDE net_device for the virtio net backend
+ *
+ * @switch_path - path to the VDE switch directory. Needs to be started on host
+ * in advance.
+ */
+struct lkl_netdev *lkl_netdev_vde_create(const char *switch_path);
 
 #ifdef __cplusplus
 }

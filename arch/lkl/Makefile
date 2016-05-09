@@ -49,6 +49,7 @@ LKL_ENTRY_POINTS := lkl_start_kernel lkl_sys_halt lkl_syscall lkl_trigger_irq \
 
 core-y += arch/lkl/kernel/
 core-y += arch/lkl/drivers/
+core-y += arch/lkl/mm/
 
 # objcopy trick is taken from rumpkernel
 GCCSYMBOLS=__umoddi3|__udivdi3|__aeabi_idiv|__aeabi_idivmod|__aeabi_llsl|__aeabi_llsr|__aeabi_uidiv|__aeabi_uidivmod|__aeabi_uldivmod
@@ -65,7 +66,6 @@ define make_ns_symbols
 	 --redefine-syms $2.renametab $1 $2; \
 	rm -f $2.renametab
 endef
-
 
 all: lkl.o
 
