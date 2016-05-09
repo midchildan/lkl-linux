@@ -13,7 +13,6 @@
 #include <time.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <linux/types.h>
 
 /* FIXME */
 #include <../platform/include/unistd.h>
@@ -21,14 +20,17 @@
 #include <../platform/include/sys/uio.h>
 
 #define __dead
+#ifndef __printflike
 #define __printflike(x,y)
+#endif	/* __printflike */
 #include <rump/rumpuser.h>
 
 #include <lkl_host.h>
 #include "iomem.h"
 
 /* FIXME */
-#include <../franken/thread/thread.h>
+#define clock_sleep(a, b, c) __sched_clock_sleep(a, b, c)
+int clock_sleep(int clk, int64_t sec, long nsec);
 
 #define container_of(ptr, type, member) \
 	(type *)((char *)(ptr) - __builtin_offsetof(type, member))

@@ -3,6 +3,8 @@
 
 #if defined(__FreeBSD__)
 #include <sys/endian.h>
+#elif defined(__ARMEL__)
+#include <machine/endian.h>
 #elif defined(__ANDROID__)
 #include <sys/endian.h>
 #define le16toh(x) letoh16(x)

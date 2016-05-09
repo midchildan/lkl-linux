@@ -24,7 +24,7 @@ all:
 # cross toolchain does not use prefixed names
 CC    := $(CROSS_COMPILE)gcc
 LD    := $(CROSS_COMPILE)$(LD)
-AR    := $(CROSS_COMPILE)$(AR)
+AR    := $(CROSS_COMPILE)ar
 export CC LD AR
 
 EXESUF   := 
@@ -49,8 +49,9 @@ OUTPUT_FORMAT = $(shell $(LD) -r -print-output-format)
 
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd elf32-littlearm))
   OUTPUT_DEF = $(shell echo | $(CC) -dM -E -)
-  CFLAGS   += -fPIC -pthread
-  ifeq (,$(filter $(OUTPUT_DEF),__ANDROID__))
+  CFLAGS   += -fPIC
+  ifeq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
+    CFLAGS   += -pthread
     LDLIBS   += -lrt -lpthread
   endif
   export CONFIG_AUTO_LKL_RUMP_HOST=y
@@ -149,10 +150,8 @@ cpfromfs$(EXESUF): cptofs$(EXESUF)
 # arm-android neither for the moment
 ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
+else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
   all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-else ifneq (,$(filter $(OUTPUT_FORMAT),elf32-littlearm))
-  all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES)) $(ALL_PROGRAMS)
 else
   all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
 #  all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
