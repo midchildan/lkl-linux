@@ -13,6 +13,9 @@
 #include <asm/syscalls.h>
 #include <asm/syscalls_32.h>
 
+/* FIXME */
+int lkl__sync_fetch_and_and_4(long unsigned int *ptr, int value);
+
 struct syscall_thread_data;
 static asmlinkage long sys_create_syscall_thread(struct syscall_thread_data *);
 
@@ -50,7 +53,11 @@ static LIST_HEAD(syscall_threads);
 static struct syscall *dequeue_syscall(struct syscall_thread_data *data)
 {
 
+#if defined(__ARMEL__)
+	return (struct syscall *)lkl__sync_fetch_and_and_4((long *)&data->s, 0);
+#else
 	return (struct syscall *)__sync_fetch_and_and((long *)&data->s, 0);
+#endif
 }
 
 static long run_syscall(struct syscall *s)

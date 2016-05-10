@@ -47,6 +47,10 @@
 #define bad_driver(msg) do { } while (0)
 #endif /* DEBUG */
 
+#if defined(__ARMEL__)
+#define __sync_synchronize(x) lkl__sync_synchronize(x)
+#endif
+
 static inline uint16_t virtio_get_used_event(struct virtio_queue *q)
 {
 	return q->avail->ring[q->num];

@@ -113,6 +113,17 @@ static void rump_sem_down(struct lkl_sem_t *_sem)
 	rumpuser_mutex_exit(sem->lock);
 }
 
+static int rump_sem_get(struct lkl_sem_t *_sem)
+{
+	struct rumpuser_sem *sem = (struct rumpuser_sem *)&_sem->sem;
+	int v = 0;
+
+	rumpuser_mutex_enter(sem->lock);
+	v = sem->count;
+	rumpuser_mutex_exit(sem->lock);
+	return v;
+}
+
 static struct lkl_mutex_t *rump_mutex_alloc(void)
 {
 	struct lkl_mutex_t *_mutex;
@@ -141,6 +152,29 @@ static void rump_mutex_free(struct lkl_mutex_t *_mutex)
 	rumpuser_mutex_destroy(_mutex->mutex);
 	rumpuser_free(_mutex, 0);
 }
+
+/* XXX: dummy TLS */
+static int rump_tls_alloc(unsigned int *key)
+{
+	return 0;
+}
+
+static int rump_tls_free(unsigned int key)
+{
+	return 0;
+}
+
+static int rump_tls_set(unsigned int key, void *data)
+{
+	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)data);
+	return 0;
+}
+
+static void *rump_tls_get(unsigned int key)
+{
+	return rumpuser_curlwp();
+}
+
 
 /* memory */
 static void *rump_mem_alloc(size_t size)
@@ -333,10 +367,15 @@ struct lkl_host_operations lkl_host_ops = {
 	.sem_free = rump_sem_free,
 	.sem_up = rump_sem_up,
 	.sem_down = rump_sem_down,
+	.sem_get = rump_sem_get,
 	.mutex_alloc = rump_mutex_alloc,
 	.mutex_free = rump_mutex_free,
 	.mutex_lock = rump_mutex_lock,
 	.mutex_unlock = rump_mutex_unlock,
+	.tls_alloc = rump_tls_alloc,
+	.tls_free = rump_tls_free,
+	.tls_set = rump_tls_set,
+	.tls_get = rump_tls_get,
 	.time = time_ns,
 	.timer_alloc = timer_alloc,
 	.timer_set_oneshot = timer_set_oneshot,
@@ -587,7 +626,7 @@ struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd)
 	nd = (struct lkl_netdev_rumpfd *)
 		malloc(sizeof(struct lkl_netdev_rumpfd));
 	if (!nd) {
-		fprintf(stderr, "tap: failed to allocate memory\n");
+		lkl_printf("tap: failed to allocate memory\n");
 		return NULL;
 	}
 

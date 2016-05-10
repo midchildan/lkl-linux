@@ -14,9 +14,55 @@
 static unsigned long irq_status;
 static bool irqs_enabled;
 
-#define TEST_AND_CLEAR_IRQ_STATUS(x)	__sync_fetch_and_and(&irq_status, 0)
 #define IRQ_BIT(x)			BIT(x-1)
-#define SET_IRQ_STATUS(x)		__sync_fetch_and_or(&irq_status, BIT(x - 1))
+
+#if defined(__ARMEL__)
+static void *irqs_lock;
+
+int lkl__sync_fetch_and_add_4(int *ptr, int value)
+{
+	lkl_ops->sem_down(irqs_lock);
+	int tmp = *ptr;
+	*ptr += value;
+	lkl_ops->sem_up(irqs_lock);
+	return tmp;
+}
+
+int lkl__sync_fetch_and_and_4(unsigned long int *ptr, int value)
+{
+	lkl_ops->sem_down(irqs_lock);
+	int tmp = *ptr;
+	*ptr *= value;
+	lkl_ops->sem_up(irqs_lock);
+	return tmp;
+}
+
+int lkl__sync_fetch_and_sub_4(int *ptr, int value)
+{
+	lkl_ops->sem_down(irqs_lock);
+	int tmp = *ptr;
+	*ptr -= value;
+	lkl_ops->sem_up(irqs_lock);
+	return tmp;
+}
+
+void lkl__sync_synchronize(void)
+{
+}
+
+int lkl__sync_store(unsigned long int *ptr, int value)
+{
+	lkl_ops->sem_down(irqs_lock);
+	*ptr = value;
+	lkl_ops->sem_up(irqs_lock);
+	return 0;
+}
+#define TEST_AND_CLEAR_IRQ_STATUS(x)	lkl__sync_fetch_and_and_4(&irq_status, 0)
+#define SET_IRQ_STATUS(x)		lkl__sync_store(&irq_status, BIT(x - 1))
+#else
+#define TEST_AND_CLEAR_IRQ_STATUS(x)   __sync_fetch_and_and(&irq_status, 0)
+#define SET_IRQ_STATUS(x)              __sync_fetch_and_or(&irq_status, BIT(x - 1))
+#endif
 
 static struct irq_info {
 	const char *user;
@@ -132,6 +178,10 @@ struct irq_chip dummy_lkl_irq_chip = {
 void init_IRQ(void)
 {
 	int i;
+
+#if defined(__ARMEL__)
+	irqs_lock = lkl_ops->sem_alloc(1);
+#endif
 
 	for (i = 0; i < NR_IRQS; i++)
 		irq_set_chip_and_handler(i, &dummy_lkl_irq_chip, handle_simple_irq);

@@ -3,6 +3,10 @@
 #include <linux/sched.h>
 #include <asm/host_ops.h>
 
+/* FIXME */
+int lkl__sync_fetch_and_sub_4(int *ptr, int value);
+int lkl__sync_fetch_and_add_4(int *ptr, int value);
+
 static volatile int threads_counter;
 
 struct thread_info *alloc_thread_info_node(struct task_struct *task, int node)
@@ -99,7 +103,11 @@ struct task_struct *__switch_to(struct task_struct *prev,
 
 	if (ei.dead) {
 		lkl_ops->sem_free(ei.sched_sem);
+#if defined(__ARMEL__)
+		lkl__sync_fetch_and_sub_4(&threads_counter, 1);
+#else
 		__sync_fetch_and_sub(&threads_counter, 1);
+#endif
 		lkl_ops->thread_exit();
 	}
 
@@ -156,7 +164,11 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 		return -ENOMEM;
 	}
 
+#if defined(__ARMEL__)
+	lkl__sync_fetch_and_add_4(&threads_counter, 1);
+#else
 	__sync_fetch_and_add(&threads_counter, 1);
+#endif
 
 	return 0;
 }
