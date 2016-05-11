@@ -18,6 +18,7 @@ int lkl__sync_fetch_and_and_4(long unsigned int *ptr, int value);
 
 struct syscall_thread_data;
 static asmlinkage long sys_create_syscall_thread(struct syscall_thread_data *);
+void do_signal(struct pt_regs *regs);
 
 typedef long (*syscall_handler_t)(long arg1, ...);
 
@@ -74,6 +75,7 @@ static long run_syscall(struct syscall *s)
 	s->ret = ret;
 
 	task_work_run();
+	do_signal(NULL);
 
 	return ret;
 }
