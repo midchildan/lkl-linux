@@ -342,7 +342,7 @@ static int timer_set_oneshot(void *_timer, unsigned long ns)
 	td->timeout = (struct timespec){ .tv_sec = ns / NSEC_PER_SEC,
 					 .tv_nsec = ns % NSEC_PER_SEC};
 	ret = rumpuser_thread_create(rump_timer_trampoline, td, "timer",
-				     1, 0, -1, &td->thrid);
+				     0, 0, -1, &td->thrid);
 
 	return ret ? -1 : 0;
 }
