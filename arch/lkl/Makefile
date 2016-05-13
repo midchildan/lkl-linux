@@ -82,7 +82,7 @@ install: lkl.o __headers arch/lkl/include/generated/uapi/asm/syscall_defs.h
 	@cp lkl.o $(INSTALL_PATH)/lib/
 	@$(srctree)/arch/lkl/scripts/headers_install.py \
 		$(subst -j,-j$(NPROC),$(findstring -j,$(MAKEFLAGS))) \
-		$(INSTALL_PATH)/include
+		$(INSTALL_PATH)include -s $(srctree)
 
 archclean:
 	$(Q)$(MAKE) $(clean)=$(boot)

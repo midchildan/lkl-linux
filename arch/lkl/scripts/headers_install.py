@@ -15,6 +15,10 @@ def find_headers(path):
         try:
             i = m.group(1)
             for p in header_paths:
+                if re.search("generated", p):
+                    p = args.path.replace("tools/lkl/include","") + "/" + p
+                else:
+                    p = args.srctree + "/" + p
                 if os.access(p + i, os.R_OK):
                     if p + i not in headers:
                         includes.add(i)
@@ -110,22 +114,24 @@ def replace(h):
 parser = argparse.ArgumentParser(description='install lkl headers')
 parser.add_argument('path', help='path to install to', )
 parser.add_argument('-j', '--jobs', help='number of parallel jobs', default=1, type=int)
+parser.add_argument('-s', '--srctree', help='the root directry of srctree', default='.', type=str)
 args = parser.parse_args()
 
-find_headers("arch/lkl/include/uapi/asm/syscalls.h")
-headers.add("arch/lkl/include/uapi/asm/host_ops.h")
+find_headers(args.srctree + "/" + "arch/lkl/include/uapi/asm/syscalls.h")
+headers.add(args.srctree + "/" + "arch/lkl/include/uapi/asm/host_ops.h")
 
 new_headers = set()
 
 for h in headers:
     dir = os.path.dirname(h)
-    out_dir = args.path + "/" + re.sub("(arch/lkl/include/uapi/|arch/lkl/include/generated/uapi/|include/uapi/|include/generated/uapi/|include/generated)(.*)", "lkl/\\2", dir)
+    out_dir = args.path + "/" + re.sub("(arch/lkl/include/uapi/|arch/lkl/include/generated/uapi/|include/uapi/|include/generated/uapi/|include/generated)(.*)", "lkl/\\2", dir.replace(args.srctree, "").replace(args.path.replace("tools/lkl/include",""), ""))
+
     try:
         os.makedirs(out_dir)
     except:
         pass
     print("  INSTALL\t%s" % (out_dir + "/" + os.path.basename(h)))
-    os.system("scripts/headers_install.sh %s %s %s" % (out_dir, dir,
+    os.system(args.srctree + "/" + "scripts/headers_install.sh %s %s %s" % (out_dir, dir,
                                                        os.path.basename(h)))
     new_headers.add(out_dir + "/" + os.path.basename(h))
 

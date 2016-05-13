@@ -41,7 +41,7 @@ export srctree
 
 # Target build configuration
 
-export CFLAGS += -Iinclude -Wall -g -O2 -Wextra -Wno-unused-parameter \
+export CFLAGS += -I$(OUTPUT)/include -Iinclude -Wall -g -O2 -Wextra -Wno-unused-parameter \
 	  -Wno-missing-field-initializers -fno-strict-aliasing \
 	  -U_FORTIFY_SOURCE -fno-stack-protector
 
@@ -82,30 +82,35 @@ else
   $(error Unrecognized platform: $(OUTPUT_FORMAT))
 endif
 
-ALL_PROGRAMS := lklfuse$(EXESUF) cptofs$(EXESUF) cpfromfs$(EXESUF) fs2tar$(EXESUF)
-ALL_LIBRARIES := liblkl.a liblkl$(SOSUF) liblkl-hijack$(SOSUF)
+ifneq ($(OUTPUT),)
+OUTPUT := $(OUTPUT)/tools/lkl/
+endif
+export OUTPUT
 
-static: liblkl.a
-shared: liblkl$(SOSUF)
-hijack: liblkl-hijack$(SOSUF)
+ALL_PROGRAMS := $(OUTPUT)lklfuse$(EXESUF) $(OUTPUT)cptofs$(EXESUF) $(OUTPUT)cpfromfs$(EXESUF) $(OUTPUT)fs2tar$(EXESUF)
+ALL_LIBRARIES := $(OUTPUT)liblkl.a $(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF)
 
-liblkl$(SOSUF): lib/lkl-in.o lib/lkl.o
-liblkl$(SOSUF): LDFLAGS += -shared
+static: $(OUTPUT)liblkl.a
+shared: $(OUTPUT)liblkl$(SOSUF)
+hijack: $(OUTPUT)liblkl-hijack$(SOSUF)
 
-liblkl-hijack$(SOSUF): lib/hijack/hijack-in.o liblkl.a
-liblkl-hijack$(SOSUF): LDFLAGS += -shared -nodefaultlibs
-liblkl-hijack$(SOSUF): LDLIBS += -ldl
+$(OUTPUT)liblkl$(SOSUF): $(OUTPUT)lib/lkl-in.o $(OUTPUT)lib/lkl.o
+$(OUTPUT)liblkl$(SOSUF): LDFLAGS += -shared
 
-lklfuse$(EXESUF): lklfuse-in.o liblkl.a
+$(OUTPUT)liblkl-hijack$(SOSUF): $(OUTPUT)lib/hijack/hijack-in.o $(OUTPUT)liblkl.a
+$(OUTPUT)liblkl-hijack$(SOSUF): LDFLAGS += -shared -nodefaultlibs
+$(OUTPUT)liblkl-hijack$(SOSUF): LDLIBS += -ldl
+
+lklfuse$(EXESUF): $(OUTPUT)lklfuse-in.o $(OUTPUT)liblkl.a
 lklfuse$(EXESUF): LDLIBS += -lfuse
 
-fs2tar$(EXESUF): fs2tar-in.o liblkl.a
+fs2tar$(EXESUF): $(OUTPUT)fs2tar-in.o $(OUTPUT)liblkl.a
 fs2tar$(EXESUF): LDLIBS += -larchive
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
   fs2tar$(EXESUF): LDLIBS += -largp
 endif
 
-cptofs$(EXESUF): cptofs-in.o liblkl.a
+cptofs$(EXESUF): $(OUTPUT)cptofs-in.o $(OUTPUT)liblkl.a
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
   cptofs$(EXESUF): LDLIBS += -largp
 endif
@@ -129,20 +134,20 @@ ifeq (,$(filter $(OUTPUT_FORMAT),pe-i386 elf32-littlearm))
   test: liblkl-hijack$(SOSUF)
 endif
 
-%-in.o: lib/lkl.o FORCE
+$(OUTPUT)%-in.o: $(OUTPUT)lib/lkl.o FORCE
 	$(Q)$(MAKE) -f $(srctree)/tools/build/Makefile.build dir=$(patsubst %/,%,$(dir $*)) obj=$(notdir $*)
 
-lib/lkl.o:
+$(OUTPUT)lib/lkl.o:
 	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) defconfig
-	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(CURDIR)
+	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(OUTPUT)
 
-liblkl.a: lib/lkl-in.o lib/lkl.o
+$(OUTPUT)liblkl.a: $(OUTPUT)lib/lkl-in.o $(OUTPUT)lib/lkl.o
 	$(QUIET_AR)$(AR) -rc $@ $^
 
-liblkl$(SOSUF) liblkl-hijack$(SOSUF) lklfuse$(EXESUF) fs2tar$(EXESUF) cptofs$(EXESUF) tests/boot tests/net-test:
+$(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF) $(OUTPUT)lklfuse$(EXESUF) $(OUTPUT)fs2tar$(EXESUF) $(OUTPUT)cptofs$(EXESUF) $(OUTPUT)tests/boot $(OUTPUT)tests/net-test:
 	$(QUIET_LINK)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-cpfromfs$(EXESUF): cptofs$(EXESUF)
+$(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)
 	$(Q)if ! [ -e $@ ]; then ln -s $< $@; fi
 
 # because of argp and fuse, none of the binaries will compile on windows
@@ -173,7 +178,7 @@ headers_install:
 	$(call QUIET_INSTALL, headers) \
 	    install -d $(DESTDIR)$(PREFIX)/include ; \
 	    install -m 644 include/lkl.h include/lkl_host.h $(DESTDIR)$(PREFIX)/include ; \
-	    cp -r include/lkl $(DESTDIR)$(PREFIX)/include
+	    cp -r $(OUTPUT)include/lkl $(DESTDIR)$(PREFIX)/include
 
 libraries_install: $(ALL_LIBRARIES)
 	$(call QUIET_INSTALL, libraries) \
