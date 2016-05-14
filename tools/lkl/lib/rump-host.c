@@ -15,9 +15,18 @@
 #include <sys/types.h>
 
 /* FIXME */
+#if 0
 #include <../platform/include/unistd.h>
 #include <../platform/include/poll.h>
 #include <../platform/include/sys/uio.h>
+#else
+#include <unistd.h>
+#include <poll.h>
+#include <sys/uio.h>
+#endif
+
+/* FIXME */
+#define RUMPRUN
 
 #define __dead
 #ifndef __printflike
@@ -324,7 +333,7 @@ static void *timer_alloc(void (*fn)(void *), void *arg)
 
 	rumpuser_malloc(sizeof(*td), 0, (void **)&td);
 
-	memset(td, 0, sizeof(*td));
+	rumpns_memset(td, 0, sizeof(*td));
 	td->f = fn;
 	td->arg = arg;
 
@@ -385,7 +394,9 @@ struct lkl_host_operations lkl_host_ops = {
 	.mem_free = rump_mem_free,
 	.ioremap = lkl_ioremap,
 	.iomem_access = lkl_iomem_access,
+#ifndef RUMPRUN
 	.virtio_devices = lkl_virtio_devs,
+#endif
 };
 
 
@@ -468,6 +479,12 @@ int rump___sysimpl_open(const char *name, int flags, ...) {return -1;}
 
 #endif /* RUMP_TEMP_STUB */
 
+#ifdef RUMPRUN
+int lkl_netdevs_remove(void)
+{
+	return 0;
+}
+#else
 /* FIXME */
 static __inline long __syscall3(long n, long a1, long a2, long a3)
 {
@@ -634,3 +651,4 @@ struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd)
 	nd->dev.ops = &rumpfd_ops;
 	return (struct lkl_netdev *)nd;
 }
+#endif

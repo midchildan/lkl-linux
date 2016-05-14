@@ -133,7 +133,7 @@ int lkl_set_ipv4_gateway(unsigned int addr)
 	if (sock < 0)
 		return sock;
 
-	memset(&re, 0, sizeof(re));
+	rumpns_memset(&re, 0, sizeof(re));
 	set_sockaddr((struct lkl_sockaddr_in *) &re.rt_dst, 0, 0);
 	set_sockaddr((struct lkl_sockaddr_in *) &re.rt_genmask, 0, 0);
 	set_sockaddr((struct lkl_sockaddr_in *) &re.rt_gateway, addr, 0);
@@ -153,7 +153,7 @@ int lkl_netdev_get_ifindex(int id)
 	if (sock < 0)
 		return sock;
 
-	snprintf(ifr.lkl_ifr_name, sizeof(ifr.lkl_ifr_name), "eth%d", id);
+	rumpns_snprintf(ifr.lkl_ifr_name, sizeof(ifr.lkl_ifr_name), "eth%d", id);
 	ret = lkl_sys_ioctl(sock, LKL_SIOCGIFINDEX, (long)&ifr);
 	lkl_sys_close(sock);
 

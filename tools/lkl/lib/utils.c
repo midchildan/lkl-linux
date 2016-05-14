@@ -169,7 +169,7 @@ int lkl_printf(const char *fmt, ...)
 
 	va_start(args, fmt);
 	va_copy(copy, args);
-	n = vsnprintf(NULL, 0, fmt, copy);
+	n = rumpns_vsnprintf(NULL, 0, fmt, copy);
 	va_end(copy);
 
 	buffer = lkl_host_ops.mem_alloc(n + 1);
@@ -177,7 +177,7 @@ int lkl_printf(const char *fmt, ...)
 		va_end(args);
 		return 0;
 	}
-	vsnprintf(buffer, n + 1, fmt, args);
+	rumpns_vsnprintf(buffer, n + 1, fmt, args);
 	va_end(args);
 
 	lkl_host_ops.print(buffer, n);

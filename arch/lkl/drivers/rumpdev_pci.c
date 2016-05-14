@@ -211,10 +211,13 @@ int rump_pci_irq_request(struct irq_data *data)
 	struct irq_desc *desc = irq_to_desc(data->irq);
 	const char *name = desc->name ? desc->name : "null"; /* XXX */
 
+	static int intr[5] = {9, 10, 11, 14, 15};
+	static int intnum = 0;
+
 	/* setup IRQ */
 	int_irq = lkl_get_free_irq(name);
 
-	ret = rumpcomp_pci_irq_map(0, 0, 0, data->irq, int_irq);
+	ret = rumpcomp_pci_irq_map(0, 0, 0, intr[intnum++] /* data->irq */, int_irq);
 	rumpcomp_pci_irq_establish(int_irq, rump_trigger_irq, data);
 
 	return 0;

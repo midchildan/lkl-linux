@@ -54,8 +54,12 @@ void unregister_iomem(void *base)
 	iomem_regions[index].ops = NULL;
 }
 
+#define GOTO_PCI
 void *lkl_ioremap(long addr, int size)
 {
+#ifdef GOTO_PCI
+	return addr;
+#else
 	int index = IOMEM_ADDR_TO_INDEX(addr);
 	struct iomem_region *iomem = &iomem_regions[index];
 
@@ -66,10 +70,91 @@ void *lkl_ioremap(long addr, int size)
 		return IOMEM_INDEX_TO_ADDR(index);
 
 	return NULL;
+#endif
 }
 
 int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
 {
+#ifdef GOTO_PCI			/* FIXME: should be transparent with platform/ */
+	uint16_t mem = (unsigned long)addr;
+	int ret = 0;
+
+	if (write) {
+		if (size == 1) {
+#ifdef __x86_64__
+			uint8_t v = *(uint8_t *)res;
+			asm volatile("outb %0, %1" :: "a"(v), "d"(mem));
+#elif __arm__
+#endif
+			return 0;
+		}
+		else if (size == 2) {
+#ifdef __x86_64__
+			uint16_t v = *(uint16_t *)res;
+			asm volatile("out %0, %1" :: "a"(v), "d"(mem));
+#elif __arm__
+#endif
+			return 0;
+		}
+		else if (size == 4) {
+#ifdef __x86_64__
+			uint32_t v = *(uint32_t *)res;
+			asm volatile("outl %0, %1" :: "a"(v), "d"(mem));
+#elif __arm__
+#endif
+			return 0;
+		}
+		else if (size == 8) {
+#ifdef __x86_64__
+			/* XXX: not implemented yet */
+			//panic("not implemented yet");
+#elif __arm__
+#endif
+			return 0;
+		}
+		else {
+			//panic("not implemented yet");
+		}
+	}
+	else {
+		if (size == 1) {
+#ifdef __x86_64__
+			uint8_t v;
+			asm volatile("inb %1,%0" : "=a"(v) : "d"(mem));
+			*(uint8_t *)res = v;
+#elif __arm__
+#endif
+			return 0;
+		}
+		else if (size == 2) {
+#ifdef __x86_64__
+			uint16_t v;
+			asm volatile("in %1,%0" : "=a"(v) : "d"(mem));
+			*(uint16_t *)res = v;
+#elif __arm__
+#endif
+			return 0;
+		}
+		else if (size == 4) {
+#ifdef __x86_64__
+			uint32_t v;
+			asm volatile("inl %1,%0" : "=a"(v) : "d"(mem));
+			*(uint32_t *)res = v;
+#elif __arm__
+#endif
+			return 0;
+		}
+		else if (size == 8) {
+#ifdef __x86_64__
+			//panic("not implemented yet");
+#elif __arm__
+#endif
+		}
+		else {
+			//panic("not implemented yet");
+		}
+	}
+#else  /* !GOTO_PCI */
 	int index = IOMEM_ADDR_TO_INDEX(addr);
 	struct iomem_region *iomem = &iomem_regions[index];
 	int offset = IOMEM_ADDR_TO_OFFSET(addr);
@@ -84,5 +169,6 @@ int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
 	else
 		ret = iomem->ops->read(iomem->data, offset, res, size);
 
+#endif
 	return ret;
 }
