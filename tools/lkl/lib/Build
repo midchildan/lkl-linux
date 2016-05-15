@@ -15,3 +15,6 @@ lkl-$(CONFIG_AUTO_LKL_VIRTIO) += virtio_net.o
 lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += virtio_net_tap.o
 lkl-$(CONFIG_AUTO_LKL_VIRTIO_NET_DPDK) += virtio_net_dpdk.o
 lkl-$(CONFIG_AUTO_LKL_VIRTIO_NET_VDE) += virtio_net_vde.o
+
+# for frankenlibc
+CFLAGS_rump-host.o = -I$(RUMP_PREFIX)/../platform/include

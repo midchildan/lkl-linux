@@ -113,8 +113,6 @@ static struct virtio_dev_ops net_ops = {
 	.release_queue = net_release_queue,
 };
 
-#define clock_sleep(a, b, c) __sched_clock_sleep(a, b, c)
-int clock_sleep(int clk, int64_t sec, long nsec);
 void poll_thread(void *arg)
 {
 	struct virtio_net_poll *np = (struct virtio_net_poll *)arg;
@@ -126,9 +124,6 @@ void poll_thread(void *arg)
 			virtio_process_queue(&np->dev->dev, 0);
 		if (ret & LKL_DEV_NET_POLL_TX)
 			virtio_process_queue(&np->dev->dev, 1);
-
-		/* XXX: need to relax thread */
-		clock_sleep(0, 0, 1000*1000); /* 1msec */
 	}
 }
 
@@ -227,8 +222,8 @@ int lkl_netdev_add(struct lkl_netdev *nd, void *mac)
 		goto out_cleanup_dev;
 
 	/* XXX: only for rump: need to use this semantics for franken_poll(2) */
+#ifdef LIBRUMPUSER
 	{
-
 		struct lkl_netdev_rumpfd {
 			struct lkl_netdev dev;
 			/* TAP device */
@@ -239,6 +234,7 @@ int lkl_netdev_add(struct lkl_netdev *nd, void *mac)
 			container_of(nd, struct lkl_netdev_rumpfd, dev);
 		franken_recv_thread(nd_rumpfd->fd, (void *)nd->rx_tid);
 	}
+#endif /* LIBRUMPUSER */
 
 	nd->tx_tid = lkl_host_ops.thread_create(poll_thread, &dev->tx_poll);
 	if (nd->tx_tid == 0)

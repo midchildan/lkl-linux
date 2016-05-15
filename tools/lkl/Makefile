@@ -54,6 +54,7 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd e
     LDLIBS   += -lrt -lpthread
   endif
   export CONFIG_AUTO_LKL_POSIX_HOST=y
+  export CONFIG_AUTO_LKL_VIRTIO=y
 
   # Intel DPDK configuration
   ifeq ($(dpdk),yes)
@@ -123,7 +124,6 @@ else
   export CONFIG_AUTO_LKL_POSIX_HOST=n
   export CONFIG_AUTO_LKL_VIRTIO=y
   CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
-  CFLAGS += -I$(RUMP_PREFIX)/../platform/include # for frankenlibc
 #  LDFLAGS += -L$(RUMP_LIB) -Wl,-rpath,$(RUMP_LIB) -lrumpuser
 
 # if rumprun=yes, then skip virtio-host build

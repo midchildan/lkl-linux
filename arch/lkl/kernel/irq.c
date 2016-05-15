@@ -145,11 +145,17 @@ void arch_local_irq_restore(unsigned long flags)
 
 static int lkl_irq_request_resource(struct irq_data *data)
 {
+	if (!lkl_ops->irq_request)
+		return 0;	/* ignore error */
+
 	return lkl_ops->irq_request(data);
 }
 
 static void lkl_irq_release_resource(struct irq_data *data)
 {
+	if (!lkl_ops->irq_release)
+		return;
+
 	return lkl_ops->irq_release(data);
 }
 

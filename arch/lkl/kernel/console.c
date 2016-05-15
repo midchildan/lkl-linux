@@ -14,7 +14,7 @@ static void console_write(struct console *con, const char *str, unsigned len)
 	static int verbose = 0;
 
         /* when console isn't NULL (not called from file_write() */
-	if (con && !verbose &&
+	if (con && !verbose && lkl_ops->getparam &&
             lkl_ops->getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
 		if (*buf != 0)
 			verbose = 1;
