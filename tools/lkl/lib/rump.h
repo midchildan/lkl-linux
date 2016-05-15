@@ -14,5 +14,7 @@ struct irq_data;
 void rump_sysproxy_init(void);
 void rump_sysproxy_fini(void);
 
+extern const struct rumpuser_hyperup hyp;
+
 int rump_pci_irq_request(struct irq_data *data);
 void rump_pci_irq_release(struct irq_data *data);

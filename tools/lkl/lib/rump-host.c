@@ -28,11 +28,7 @@
 /* FIXME */
 #define RUMPRUN
 
-#define __dead
-#ifndef __printflike
-#define __printflike(x,y)
-#endif	/* __printflike */
-#include <rump/rumpuser.h>
+#include "rump.h"
 
 #include <lkl_host.h>
 #include "iomem.h"
@@ -52,7 +48,7 @@ int *__errno(void);
 #define NSEC_PER_SEC	1000000000L
 
 /* console */
-static void print(const char *str, int len)
+static void rump_print(const char *str, int len)
 {
 	while (len-- > 0) {
 		rumpuser_putchar(*str);
@@ -389,11 +385,14 @@ struct lkl_host_operations lkl_host_ops = {
 	.timer_alloc = timer_alloc,
 	.timer_set_oneshot = timer_set_oneshot,
 	.timer_free = timer_free,
-	.print = print,
+	.print = rump_print,
 	.mem_alloc = rump_mem_alloc,
 	.mem_free = rump_mem_free,
 	.ioremap = lkl_ioremap,
 	.iomem_access = lkl_iomem_access,
+	.irq_request = rump_pci_irq_request,
+	.irq_release = rump_pci_irq_release,
+	.getparam = rumpuser_getparam,
 #ifndef RUMPRUN
 	.virtio_devices = lkl_virtio_devs,
 #endif
@@ -401,7 +400,6 @@ struct lkl_host_operations lkl_host_ops = {
 
 
 /* entry/exit points */
-extern const struct rumpuser_hyperup rumpns_hyp;
 #define LKL_MEM_SIZE 100 * 1024 * 1024
 char *boot_cmdline = "";	/* FIXME: maybe we have rump_set_boot_cmdline? */
 static char buf[256];
@@ -409,7 +407,7 @@ static int verbose;
 
 int rump_init(void)
 {
-	if (rumpuser_init(RUMPUSER_VERSION, &rumpns_hyp) != 0) {
+	if (rumpuser_init(RUMPUSER_VERSION, &hyp) != 0) {
 		rumpuser_dprintf("rumpuser init failed\n");
 		return EINVAL;
 	}

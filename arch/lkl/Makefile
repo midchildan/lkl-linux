@@ -30,16 +30,6 @@ else
 NPROC=$(shell nproc)
 endif
 
-# rump libraries
-RUMP_PREFIX?=$(abspath $(srctree)/../librumpuser)
-RUMP_INCLUDE?=$(RUMP_PREFIX)/
-ifneq ($(wildcard $(RUMP_PREFIX)/.),)
-KBUILD_CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
-KBUILD_CFLAGS += -isystem $(RUMP_INCLUDE)
-else
-$(error "Couldn't found $(RUMP_PREFIX)")
-endif
-
 KBUILD_CFLAGS += -Iarch/lkl/kernel
 
 LDFLAGS_vmlinux += -r

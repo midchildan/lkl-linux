@@ -5,6 +5,7 @@
 struct lkl_mutex_t;
 struct lkl_sem_t;
 typedef unsigned long lkl_thread_t;
+struct irq_data;
 
 /**
  * lkl_host_operations - host operations used by the Linux kernel
@@ -102,6 +103,11 @@ struct lkl_host_operations {
 	void* (*ioremap)(long addr, int size);
 	int (*iomem_access)(const volatile void *addr, void *val, int size,
 			    int write);
+
+	int (*irq_request)(struct irq_data *data);
+	void (*irq_release)(struct irq_data *data);
+
+	int (*getparam)(const char *name, void *buf, int buflen);
 
 	long (*gettid)(void);
 };

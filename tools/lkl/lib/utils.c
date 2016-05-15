@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <lkl_host.h>
 
+/* XXX */
+#define vsnprintf rumpns_vsnprintf
+
 static const char * const lkl_err_strings[] = {
 	"Success",
 	"Operation not permitted",
@@ -169,7 +172,7 @@ int lkl_printf(const char *fmt, ...)
 
 	va_start(args, fmt);
 	va_copy(copy, args);
-	n = rumpns_vsnprintf(NULL, 0, fmt, copy);
+	n = vsnprintf(NULL, 0, fmt, copy);
 	va_end(copy);
 
 	buffer = lkl_host_ops.mem_alloc(n + 1);
@@ -177,7 +180,7 @@ int lkl_printf(const char *fmt, ...)
 		va_end(args);
 		return 0;
 	}
-	rumpns_vsnprintf(buffer, n + 1, fmt, args);
+	vsnprintf(buffer, n + 1, fmt, args);
 	va_end(args);
 
 	lkl_host_ops.print(buffer, n);

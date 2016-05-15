@@ -8,8 +8,6 @@
 #include <linux/cdev.h>
 #include <linux/major.h>
 
-#include "rump.h"
-
 static void console_write(struct console *con, const char *str, unsigned len)
 {
 	static char buf[256];
@@ -17,7 +15,7 @@ static void console_write(struct console *con, const char *str, unsigned len)
 
         /* when console isn't NULL (not called from file_write() */
 	if (con && !verbose &&
-            rumpuser_getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
+            lkl_ops->getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
 		if (*buf != 0)
 			verbose = 1;
         }
@@ -25,10 +23,8 @@ static void console_write(struct console *con, const char *str, unsigned len)
         if (con && !verbose)
 		return;
 
-	while (len-- > 0) {
-		rumpuser_putchar(*str);
-		str++;
-	}
+	if (lkl_ops->print)
+		lkl_ops->print(str, len);
 }
 
 #ifdef CONFIG_LKL_EARLY_CONSOLE
@@ -71,9 +67,11 @@ static ssize_t file_write(struct file *fp, const char __user *s,
 static ssize_t file_read(struct file *file, char __user *buf, size_t size,
 			 loff_t *ppos)
 {
+	int err = 0;
+/* need to use iovread in host_ops (not directly from rump hypercall) */
+#ifdef FIXME
 	struct rumpuser_iovec iov;
 	ssize_t ret;
-	int err;
 
 	iov.iov_base = buf;
 	iov.iov_len = size;
@@ -83,6 +81,7 @@ static ssize_t file_read(struct file *file, char __user *buf, size_t size,
 		return ret;
 	}
 
+#endif
 	return -err;
 }
 

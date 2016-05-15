@@ -2,6 +2,10 @@
 #include <string.h>
 #include <lkl_host.h>
 
+/* XXX */
+#define snprintf rumpns_snprintf
+#define sscanf rumpns_sscanf
+
 long lkl_mount_sysfs(void)
 {
 	long ret;

@@ -9,11 +9,10 @@
 #include <linux/types.h>
 #include <generated/utsrelease.h>
 
+#ifdef ENABLE_SYSPROXY
 #include "rump.h"
 
 extern struct rump_sysproxy_ops rump_sysproxy_ops;
-
-#ifdef ENABLE_SYSPROXY
 int rump_init_server(const char *url)
 {
 	return rumpuser_sp_init(url, "Linux", UTS_RELEASE, "libos");

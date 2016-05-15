@@ -54,7 +54,7 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd e
     CFLAGS   += -pthread
     LDLIBS   += -lrt -lpthread
   endif
-  export CONFIG_AUTO_LKL_RUMP_HOST=y
+  export CONFIG_AUTO_LKL_POSIX_HOST=y
 
   # Intel DPDK configuration
   ifeq ($(dpdk),yes)
@@ -84,6 +84,8 @@ endif
 
 ifneq ($(OUTPUT),)
 OUTPUT := $(OUTPUT)/tools/lkl/
+else
+OUTPUT := $(CURDIR)/
 endif
 export OUTPUT
 
@@ -116,17 +118,18 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
 endif
 
 # if there is no librumpuser.a, then skip execs build
-ifeq (,$(wildcard $(RUMP_LIB)/librumpuser*))
-execs =
+ifeq (,$(wildcard $(RUMP_INCLUDE)))
 else
-LDFLAGS += -L$(RUMP_LIB) -Wl,-rpath,$(RUMP_LIB) -lrumpuser
+  export CONFIG_AUTO_LKL_RUMP_HOST=y
+  export CONFIG_AUTO_LKL_POSIX_HOST=n
+#  LDFLAGS += -L$(RUMP_LIB) -Wl,-rpath,$(RUMP_LIB) -lrumpuser
 endif
 
 TEST_TARGETS        := test valgrind gdb
 
-tests/boot: tests/boot-in.o liblkl.a
-tests/net-test: tests/net-test-in.o liblkl.a
-$(TEST_TARGETS): tests/boot tests/net-test
+$(OUTPUT)tests/boot: $(OUTPUT)tests/boot-in.o $(OUTPUT)liblkl.a
+$(OUTPUT)tests/net-test: $(OUTPUT)tests/net-test-in.o $(OUTPUT)liblkl.a
+$(TEST_TARGETS): $(OUTPUT)tests/boot $(OUTPUT)tests/net-test
 
 # because of libdl, liblkl-hijack will not compile on windows
 # fortunately, the test target will handle a missing libhijack.so correctly

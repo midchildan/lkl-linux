@@ -3,6 +3,9 @@
 #include "endian.h"
 #include <lkl_host.h>
 
+/* XXX */
+#define snprintf rumpns_snprintf
+#define memset rumpns_memset
 
 static inline void set_sockaddr(struct lkl_sockaddr_in *sin, unsigned int addr,
 				unsigned short port)
@@ -133,7 +136,7 @@ int lkl_set_ipv4_gateway(unsigned int addr)
 	if (sock < 0)
 		return sock;
 
-	rumpns_memset(&re, 0, sizeof(re));
+	memset(&re, 0, sizeof(re));
 	set_sockaddr((struct lkl_sockaddr_in *) &re.rt_dst, 0, 0);
 	set_sockaddr((struct lkl_sockaddr_in *) &re.rt_genmask, 0, 0);
 	set_sockaddr((struct lkl_sockaddr_in *) &re.rt_gateway, addr, 0);
@@ -153,7 +156,7 @@ int lkl_netdev_get_ifindex(int id)
 	if (sock < 0)
 		return sock;
 
-	rumpns_snprintf(ifr.lkl_ifr_name, sizeof(ifr.lkl_ifr_name), "eth%d", id);
+	snprintf(ifr.lkl_ifr_name, sizeof(ifr.lkl_ifr_name), "eth%d", id);
 	ret = lkl_sys_ioctl(sock, LKL_SIOCGIFINDEX, (long)&ifr);
 	lkl_sys_close(sock);
 

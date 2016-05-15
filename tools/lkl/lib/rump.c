@@ -5,13 +5,17 @@
  * Author: Hajime Tazaki <thehajime@gmail.com>
  */
 
-#include <linux/sched.h>
-#include <asm/types.h>
-#include <asm/unistd.h>
-#include <asm/host_ops.h>
-#include <asm/syscalls.h>
+#include <stdint.h>
+#include <sys/types.h>
+
+#include <unistd.h>
+#include <poll.h>
+#include <sys/uio.h>
 
 #include "rump.h"
+
+#include <lkl.h>
+#include <lkl_host.h>
 
 static struct lwp *rump_libos_lwproc_curlwp(void);
 static int rump_libos_lwproc_newlwp(pid_t pid);
@@ -40,6 +44,7 @@ rump_daemonize_done(int error)
 {
 	return 0;
 }
+
 
 int
 rump_pub_lwproc_rfork(int arg1)
@@ -119,6 +124,7 @@ rump_libos_hyp_syscall(int num, void *arg, long *retval)
 static int
 rump_libos_lwproc_rfork(void *priv, int flags, const char *comm)
 {
+#ifdef FIXME
 	/* FIXME: needs new task_struct instead of get_current() */
 	struct thread_info *ti = task_thread_info(get_current());
 
@@ -127,7 +133,7 @@ rump_libos_lwproc_rfork(void *priv, int flags, const char *comm)
 
 	rumpuser_curlwpop(RUMPUSER_LWP_CREATE, (struct lwp *)ti);
 	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)ti);
-
+#endif
 	return 0;
 }
 
@@ -152,6 +158,7 @@ rump_libos_lwproc_switch(struct lwp *newlwp)
 static int
 rump_libos_lwproc_newlwp(pid_t pid)
 {
+#ifdef FIXME
 	/* find rump_task */
 	struct thread_info *ti = NULL;
 	struct task_struct *p;
@@ -173,6 +180,7 @@ rump_libos_lwproc_newlwp(pid_t pid)
 	/* set to currnet */
 	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)ti);
 
+#endif /* FIXME */
 	return 0;
 }
 
@@ -188,17 +196,20 @@ rump_libos_hyp_lwpexit(void)
 	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
 
 	rumpuser_curlwpop(RUMPUSER_LWP_DESTROY, (struct lwp *)ti);
+#ifdef FIXME
 	free_thread_info(ti);
+#endif
 }
 
 static pid_t
 rump_libos_hyp_getpid(void)
 {
+#ifdef FIXME
 	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
 
 	return ti->task->pid;
+#endif
 }
-
 
 static void rump_libos_user_unschedule(int nlocks, int *countp,
 				       void *interlock) {}
@@ -210,6 +221,7 @@ const struct rumpuser_hyperup hyp = {
 	.hyp_unschedule		= rump_unschedule,
 	.hyp_backend_unschedule	= rump_libos_user_unschedule,
 	.hyp_backend_schedule	= rump_libos_user_schedule,
+
 	.hyp_lwproc_switch	= rump_libos_lwproc_switch,
 	.hyp_lwproc_release	= rump_libos_lwproc_release,
 	.hyp_lwproc_newlwp	= rump_libos_lwproc_newlwp,

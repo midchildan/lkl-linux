@@ -9,8 +9,6 @@
 #include <asm/irqflags.h>
 #include <asm/host_ops.h>
 
-#include "rump.h"
-
 static unsigned long irq_status;
 static bool irqs_enabled;
 
@@ -147,12 +145,12 @@ void arch_local_irq_restore(unsigned long flags)
 
 static int lkl_irq_request_resource(struct irq_data *data)
 {
-	return rump_pci_irq_request(data);
+	return lkl_ops->irq_request(data);
 }
 
 static void lkl_irq_release_resource(struct irq_data *data)
 {
-	rump_pci_irq_release(data);
+	return lkl_ops->irq_release(data);
 }
 
 static void noop(struct irq_data *data) { }
