@@ -14,7 +14,6 @@ OUTPUT_FORMAT=$(shell $(LD) -r -print-output-format)
 RUMP_PREFIX?=$(abspath ../../../rumpobj/)
 RUMP_LIB=$(RUMP_PREFIX)/rump/lib
 RUMP_INCLUDE?=$(RUMP_PREFIX)/
-CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
 # default target
 all:
 
@@ -117,12 +116,21 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
   cptofs$(EXESUF): LDLIBS += -largp
 endif
 
-# if there is no librumpuser.a, then skip execs build
+# if there is no rumpuser.h, then skip build
 ifeq (,$(wildcard $(RUMP_INCLUDE)))
 else
   export CONFIG_AUTO_LKL_RUMP_HOST=y
   export CONFIG_AUTO_LKL_POSIX_HOST=n
+  export CONFIG_AUTO_LKL_VIRTIO=y
+  CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
+  CFLAGS += -I$(RUMP_PREFIX)/../platform/include # for frankenlibc
 #  LDFLAGS += -L$(RUMP_LIB) -Wl,-rpath,$(RUMP_LIB) -lrumpuser
+
+# if rumprun=yes, then skip virtio-host build
+ifeq ($(rumprun),yes)
+  CFLAGS += -DRUMPRUN
+  export CONFIG_AUTO_LKL_VIRTIO=n
+endif
 endif
 
 TEST_TARGETS        := test valgrind gdb

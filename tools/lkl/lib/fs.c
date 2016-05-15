@@ -3,8 +3,10 @@
 #include <lkl_host.h>
 
 /* XXX */
+#ifdef RUMPRUN
 #define snprintf rumpns_snprintf
 #define sscanf rumpns_sscanf
+#endif
 
 long lkl_mount_sysfs(void)
 {

@@ -14,24 +14,20 @@
 #include <errno.h>
 #include <sys/types.h>
 
-/* FIXME */
-#if 0
-#include <../platform/include/unistd.h>
-#include <../platform/include/poll.h>
-#include <../platform/include/sys/uio.h>
-#else
 #include <unistd.h>
 #include <poll.h>
 #include <sys/uio.h>
-#endif
 
 /* FIXME */
-#define RUMPRUN
+#ifdef RUMPRUN
+#define memset rumpns_memset
+#endif
 
 #include "rump.h"
 
 #include <lkl_host.h>
 #include "iomem.h"
+
 
 /* FIXME */
 #define clock_sleep(a, b, c) __sched_clock_sleep(a, b, c)
@@ -329,7 +325,7 @@ static void *timer_alloc(void (*fn)(void *), void *arg)
 
 	rumpuser_malloc(sizeof(*td), 0, (void **)&td);
 
-	rumpns_memset(td, 0, sizeof(*td));
+	memset(td, 0, sizeof(*td));
 	td->f = fn;
 	td->arg = arg;
 

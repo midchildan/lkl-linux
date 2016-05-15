@@ -4,8 +4,10 @@
 #include <lkl_host.h>
 
 /* XXX */
+#ifdef RUMPRUN
 #define snprintf rumpns_snprintf
 #define memset rumpns_memset
+#endif
 
 static inline void set_sockaddr(struct lkl_sockaddr_in *sin, unsigned int addr,
 				unsigned short port)

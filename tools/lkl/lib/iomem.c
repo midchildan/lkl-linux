@@ -54,10 +54,9 @@ void unregister_iomem(void *base)
 	iomem_regions[index].ops = NULL;
 }
 
-#define GOTO_PCI
 void *lkl_ioremap(long addr, int size)
 {
-#ifdef GOTO_PCI
+#ifdef RUMPRUN
 	return addr;
 #else
 	int index = IOMEM_ADDR_TO_INDEX(addr);
@@ -75,7 +74,7 @@ void *lkl_ioremap(long addr, int size)
 
 int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
 {
-#ifdef GOTO_PCI			/* FIXME: should be transparent with platform/ */
+#ifdef RUMPRUN			/* FIXME: should be transparent with platform/ */
 	uint16_t mem = (unsigned long)addr;
 	int ret = 0;
 
@@ -154,7 +153,7 @@ int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
 			//panic("not implemented yet");
 		}
 	}
-#else  /* !GOTO_PCI */
+#else  /* !RUMPRUN */
 	int index = IOMEM_ADDR_TO_INDEX(addr);
 	struct iomem_region *iomem = &iomem_regions[index];
 	int offset = IOMEM_ADDR_TO_OFFSET(addr);
