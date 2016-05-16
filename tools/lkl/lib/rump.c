@@ -9,7 +9,6 @@
 #include <sys/types.h>
 
 #include <unistd.h>
-#include <poll.h>
 #include <sys/uio.h>
 
 #include "rump.h"
