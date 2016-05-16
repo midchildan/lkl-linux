@@ -28,12 +28,12 @@ test:
         parallel: true
     - cd tools/lkl && ./scripts/dpdk-sdk-build.sh:
         parallel: true
-    - cd tools/lkl &&  make -j8 ${MKARG}:
+    - cd tools/lkl && if [ $CIRCLE_NODE_INDEX -eq 0 ] ; then make -j8 ${MKARG} ; fi:
         parallel: true
     - cd tools/lkl && if [ $CIRCLE_NODE_INDEX -eq 2 ] ; then make tests/boot-in.o; arm-linux-androideabi-gcc -o tests/boot tests/boot-in.o liblkl.a -static ; fi:
         parallel: true
-    - cd tools/lkl && make test:
-         parallel: true
+    - cd tools/lkl && if [ $CIRCLE_NODE_INDEX -eq 0 ] ; then make test ; fi:
+        parallel: true
 
     - ? >
         if [ -n "${RUN_NIGHTLY_BUILD}" ]; then
