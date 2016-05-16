@@ -8,9 +8,6 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include <unistd.h>
-#include <sys/uio.h>
-
 #include "rump.h"
 
 #include <lkl.h>

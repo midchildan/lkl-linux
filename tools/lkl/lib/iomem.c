@@ -57,7 +57,7 @@ void unregister_iomem(void *base)
 void *lkl_ioremap(long addr, int size)
 {
 #ifdef RUMPRUN
-	return addr;
+	return (void *)addr;
 #else
 	int index = IOMEM_ADDR_TO_INDEX(addr);
 	struct iomem_region *iomem = &iomem_regions[index];
