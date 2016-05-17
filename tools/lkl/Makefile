@@ -165,11 +165,11 @@ $(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)
 # because of libdl, liblkl-hijack will not compile on windows
 # arm-android neither for the moment
 ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
-  all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
 else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
-  all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
 else
-  all: $(filter-out liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
 #  all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
 endif
 
