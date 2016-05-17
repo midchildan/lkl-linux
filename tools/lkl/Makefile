@@ -45,9 +45,9 @@ export CFLAGS += -I$(OUTPUT)/include -Iinclude -Wall -g -O2 -Wextra -Wno-unused-
 	  -U_FORTIFY_SOURCE -fno-stack-protector
 
 OUTPUT_FORMAT = $(shell $(LD) -r -print-output-format)
+OUTPUT_DEF = $(shell echo | $(CC) -dM -E -)
 
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd elf32-littlearm))
-  OUTPUT_DEF = $(shell echo | $(CC) -dM -E -)
   CFLAGS   += -fPIC
   ifeq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
     CFLAGS   += -pthread
@@ -103,18 +103,18 @@ $(OUTPUT)liblkl-hijack$(SOSUF): $(OUTPUT)lib/hijack/hijack-in.o $(OUTPUT)liblkl.
 $(OUTPUT)liblkl-hijack$(SOSUF): LDFLAGS += -shared -nodefaultlibs
 $(OUTPUT)liblkl-hijack$(SOSUF): LDLIBS += -ldl
 
-lklfuse$(EXESUF): $(OUTPUT)lklfuse-in.o $(OUTPUT)liblkl.a
-lklfuse$(EXESUF): LDLIBS += -lfuse
+$(OUTPUT)lklfuse$(EXESUF): $(OUTPUT)lklfuse-in.o $(OUTPUT)liblkl.a
+$(OUTPUT)lklfuse$(EXESUF): LDLIBS += -lfuse
 
-fs2tar$(EXESUF): $(OUTPUT)fs2tar-in.o $(OUTPUT)liblkl.a
-fs2tar$(EXESUF): LDLIBS += -larchive
+$(OUTPUT)fs2tar$(EXESUF): $(OUTPUT)fs2tar-in.o $(OUTPUT)liblkl.a
+$(OUTPUT)fs2tar$(EXESUF): LDLIBS += -larchive
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
-  fs2tar$(EXESUF): LDLIBS += -largp
+  $(OUTPUT)fs2tar$(EXESUF): LDLIBS += -largp
 endif
 
-cptofs$(EXESUF): $(OUTPUT)cptofs-in.o $(OUTPUT)liblkl.a
+$(OUTPUT)cptofs$(EXESUF): $(OUTPUT)cptofs-in.o $(OUTPUT)liblkl.a
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
-  cptofs$(EXESUF): LDLIBS += -largp
+  $(OUTPUT)cptofs$(EXESUF): LDLIBS += -largp
 endif
 
 # if there is no rumpuser.h, then skip build
@@ -168,9 +168,10 @@ ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
 else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
   all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-else
+else ifneq (,$(wildcard $(RUMP_INCLUDE)))
   all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-#  all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
+else
+  all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
 endif
 
 clean:
