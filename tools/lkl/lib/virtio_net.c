@@ -113,6 +113,8 @@ static struct virtio_dev_ops net_ops = {
 	.release_queue = net_release_queue,
 };
 
+#define clock_sleep(a, b, c) __sched_clock_sleep(a, b, c)
+int clock_sleep(int clk, int64_t sec, long nsec);
 void poll_thread(void *arg)
 {
 	struct virtio_net_poll *np = (struct virtio_net_poll *)arg;
@@ -124,6 +126,9 @@ void poll_thread(void *arg)
 			virtio_process_queue(&np->dev->dev, 0);
 		if (ret & LKL_DEV_NET_POLL_TX)
 			virtio_process_queue(&np->dev->dev, 1);
+
+		/* XXX: need to relax thread */
+		clock_sleep(0, 0, 1000*1000); /* 1msec */
 	}
 }
 
