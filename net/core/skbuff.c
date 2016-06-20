@@ -199,8 +199,8 @@ out:
  *	Buffers may only be allocated from interrupts using a @gfp_mask of
  *	%GFP_ATOMIC.
  */
-struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
-			    int flags, int node)
+struct sk_buff *__alloc_skb_internal(unsigned int size, gfp_t gfp_mask,
+				     int flags, int node)
 {
 	struct kmem_cache *cache;
 	struct skb_shared_info *shinfo;
@@ -280,6 +280,121 @@ nodata:
 	goto out;
 }
 EXPORT_SYMBOL(__alloc_skb);
+
+/* pre-allocation */
+#define SKB_PREALLOCATION
+//#define SKB_DEBUG
+
+#define MAX_SKB_PREALLOC  1024
+#define SKB_PREALLOC_SIZE_UDP_64B  139 // 75B + udp payload-size?
+#define SKB_PREALLOC_SIZE_UDP_1500B 1547
+#define SKB_PREALLOC_SIZE_TCP 1656
+static int skbuff_prealloc_init = 0;
+static struct sk_buff *skb_prealloc[MAX_SKB_PREALLOC];
+static int __init skbuff_preallocate(void);
+static int skb_prealloc_count;
+
+
+struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
+			    int flags, int node)
+{
+	struct sk_buff *skb;
+	static int count = 0;
+	void *data;
+	struct skb_shared_info *shinfo;
+
+#ifdef SKB_DEBUG
+pr_info("req(%d) len= %d\n", ++count, size);
+#endif
+
+#ifndef SKB_PREALLOCATION
+	return __alloc_skb_internal(size, gfp_mask, flags, node);
+#endif
+
+	/* XXX */
+	if ((size % 64 != 11) && size !=  SKB_PREALLOC_SIZE_TCP)
+#if 0
+	if (size != SKB_PREALLOC_SIZE_UDP_64B &&
+	    size != SKB_PREALLOC_SIZE_UDP_1500B &&
+	    size !=  SKB_PREALLOC_SIZE_TCP)
+#endif
+		return __alloc_skb_internal(size, gfp_mask, flags, node);
+
+	if (!skb_prealloc[skb_prealloc_count])
+		BUG();
+
+	skb = skb_prealloc[skb_prealloc_count];
+	skb_prealloc[skb_prealloc_count--] = NULL;
+
+	data = skb->head;
+	skb->dev_alloc = 1;
+
+	skb->truesize = SKB_TRUESIZE(size);
+	atomic_set(&skb->users, 1);
+	skb->head = data;
+	skb->data = data;
+	skb_reset_tail_pointer(skb);
+	skb->end = skb->tail + size;
+	skb->mac_header = (typeof(skb->mac_header))~0U;
+	skb->transport_header = (typeof(skb->transport_header))~0U;
+
+	shinfo = skb_shinfo(skb);
+	memset(shinfo, 0, offsetof(struct skb_shared_info, dataref));
+	atomic_set(&shinfo->dataref, 1);
+	kmemcheck_annotate_variable(shinfo->destructor_arg);
+
+	return skb;
+}
+
+
+void __kfree_skb_internal(struct sk_buff *skb);
+void __kfree_skb(struct sk_buff *skb)
+{
+#ifdef SKB_DEBUG
+pr_info("free len= %d, skb=%p\n", skb->len, skb);
+#endif
+
+#ifndef SKB_PREALLOCATION
+	return __kfree_skb_internal(skb);
+#endif
+
+	if (!skb->dev_alloc)
+		return __kfree_skb_internal(skb);
+
+#ifdef SKB_DEBUG
+	pr_info("queue reusable skb (%d)\n", skb_prealloc_count);
+#endif
+
+	if (skb_prealloc[skb_prealloc_count + 1])
+		BUG();
+
+	skb_prealloc[++skb_prealloc_count] = skb;
+
+	skb_reset_tail_pointer(skb);
+	skb->len = 0;
+	skb->tail = 0;
+
+	return;
+}
+
+static int __init skbuff_preallocate(void)
+{
+	int i;
+
+	if (skbuff_prealloc_init)
+		return 0;
+
+	for (i = 0; i < MAX_SKB_PREALLOC; i++)
+		skb_prealloc[i] =
+			__alloc_skb_internal(SKB_PREALLOC_SIZE_TCP,
+					     __GFP_MEMALLOC, SKB_ALLOC_RX, NUMA_NO_NODE);
+
+	skb_prealloc_count = MAX_SKB_PREALLOC - 1;
+	skbuff_prealloc_init = 1;
+	return 0;
+}
+//late_initcall(skbuff_preallocate);
+
 
 /**
  * __build_skb - build a network buffer
@@ -467,6 +582,7 @@ skb_fail:
 	return skb;
 }
 EXPORT_SYMBOL(__netdev_alloc_skb);
+
 
 /**
  *	__napi_alloc_skb - allocate skbuff for rx in a specific NAPI instance
@@ -678,7 +794,7 @@ static void skb_release_all(struct sk_buff *skb)
  *	always call kfree_skb
  */
 
-void __kfree_skb(struct sk_buff *skb)
+void __kfree_skb_internal(struct sk_buff *skb)
 {
 	skb_release_all(skb);
 	kfree_skbmem(skb);
@@ -3421,6 +3537,8 @@ void __init skb_init(void)
 						0,
 						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
 						NULL);
+
+	skbuff_preallocate();
 }
 
 /**

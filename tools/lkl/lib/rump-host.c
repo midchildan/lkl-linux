@@ -565,7 +565,8 @@ static int net_tx(struct lkl_netdev *nd, void *data, int len)
 		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	int ret;
 
-	ret = write(nd_rumpfd->fd, data, len);
+//	ret = write(nd_rumpfd->fd, data, len);
+	ret = writev(nd_rumpfd->fd, (struct iovec *)data, len);
 	if (ret <= 0 && errno == -EAGAIN)
 		return -1;
 	return 0;

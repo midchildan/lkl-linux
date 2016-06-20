@@ -674,7 +674,8 @@ struct sk_buff {
 				fclone:2,
 				peeked:1,
 				head_frag:1,
-				xmit_more:1;
+				xmit_more:1,
+				dev_alloc:1;
 	/* one bit hole */
 	kmemcheck_bitfield_end(flags1);
 

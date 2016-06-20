@@ -176,6 +176,36 @@ static int virtio_process_one(struct virtio_dev *dev, struct virtio_queue *q,
 	return 0;
 }
 
+static int virtio_process_bulk(struct virtio_dev *dev, struct virtio_queue *q,
+			      int idx, struct virtio_req *req)
+{
+	int q_buf_cnt = 0;
+	uint16_t prev_flags = LKL_VRING_DESC_F_NEXT;
+	struct lkl_vring_desc *curr_vring_desc;
+
+	while (q->last_avail_idx != le16toh(q->avail->idx)) {
+		curr_vring_desc = vring_desc_at_le_idx(
+			q, q->avail->ring[q->last_avail_idx & (q->num - 1)]);
+		while ((prev_flags & LKL_VRING_DESC_F_NEXT) &&
+		       (q_buf_cnt < VIRTIO_REQ_MAX_BUFS)){
+
+			prev_flags = le16toh(curr_vring_desc->flags);
+			init_dev_buf_from_vring_desc(&req->buf[q_buf_cnt++], curr_vring_desc);
+			curr_vring_desc = vring_desc_at_le_idx(q, curr_vring_desc->next);
+		}
+		__sync_synchronize();
+		q->last_avail_idx++;
+	}
+
+	/* Somehow, we've built a request that's too long to fit onto our device */
+	if (q_buf_cnt == VIRTIO_REQ_MAX_BUFS &&
+		(prev_flags & LKL_VRING_DESC_F_NEXT))
+		bad_driver("enqueued too many request bufs");
+
+	req->buf_count = q_buf_cnt;
+	return 0;
+}
+
 /* NB: we can enter this function two different ways in the case of
  * netdevs --- either through a tx/rx thread poll (which the LKL
  * scheduler knows nothing about) or through virtio_write called
@@ -196,6 +226,7 @@ static int virtio_process_one(struct virtio_dev *dev, struct virtio_queue *q,
 void virtio_process_queue(struct virtio_dev *dev, uint32_t qidx)
 {
 	struct virtio_queue *q = &dev->queue[qidx];
+	int ret;
 
 	if (!q->ready)
 		return;
@@ -205,12 +236,34 @@ void virtio_process_queue(struct virtio_dev *dev, uint32_t qidx)
 
 	virtio_set_avail_event(q, q->avail->idx);
 
-	while (q->last_avail_idx != le16toh(q->avail->idx)) {
-		/* Make sure following loads happens after loading q->avail->idx.
-		 */
-		__sync_synchronize();
-		if (virtio_process_one(dev, q, q->last_avail_idx) < 0)
-			break;
+
+	/* TX */
+	if (qidx == 1) {
+		struct virtio_req req = {
+			.dev = dev,
+			.q = q,
+			.idx = q->avail->ring[q->last_avail_idx & (q->num - 1)],
+		};
+		virtio_process_bulk(dev, q, q->last_avail_idx, &req);
+
+		if (req.buf_count) {
+			ret = dev->ops->enqueue(dev, &req);
+			if (ret < 0)
+				return;
+		}
+	}
+	/* RX */
+	else {
+		int count = 0;
+		while (q->last_avail_idx != le16toh(q->avail->idx)) {
+//			if (count++ > 0)
+//				lkl_printf("cnt = %d\n", count);
+			/* Make sure following loads happens after loading q->avail->idx.
+			 */
+			__sync_synchronize();
+			if (virtio_process_one(dev, q, q->last_avail_idx) < 0)
+				break;
+		}
 	}
 
 	if (dev->ops->release_queue)

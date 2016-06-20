@@ -106,9 +106,62 @@ static int net_enqueue(struct virtio_dev *dev, struct virtio_req *req)
 	return 0;
 }
 
+#include <linux/uio.h>
+
+static int net_bulk_enqueue(struct virtio_dev *dev, struct virtio_req *req)
+{
+	struct lkl_virtio_net_hdr_v1 *header;
+	struct virtio_net_dev *net_dev;
+	int ret, len;
+	void *buf;
+
+	header = req->buf[0].addr;
+	net_dev = netdev_of(dev);
+	len = req->buf[0].len - sizeof(*header);
+
+	buf = &header[1];
+
+	if (!len && req->buf_count > 1) {
+		buf = req->buf[1].addr;
+		len = req->buf[1].len;
+	}
+
+	/* Pick which virtqueue to send the buffer(s) to */
+	if (is_tx_queue(dev, req->q)) {
+		struct iovec iov[req->buf_count];
+if (req->buf_count > 1) {
+	memcpy(&iov, &req->buf[1], sizeof(req->buf) *(req->buf_count - 1));
+	len = req->buf_count - 1;
+//	lkl_printf("TX: buf count %d\n", req->buf_count);
+}
+else {
+	iov[0].iov_base = buf;
+	iov[0].iov_len = len;
+	len = 1;
+}
+		ret = net_dev->ops->tx(net_dev->nd, iov, len);
+//		ret = net_dev->ops->tx(net_dev->nd, req->buf, req->buf_count);
+		if (ret < 0)
+			return -1;
+	} else if (is_rx_queue(dev, req->q)) {
+//lkl_printf("RX: buf count %d\n", req->buf_count);
+		header->num_buffers = 1;
+		ret = net_dev->ops->rx(net_dev->nd, buf, &len);
+		if (ret < 0)
+			return -1;
+	} else {
+		bad_request("tried to push on non-existent queue");
+		return -1;
+	}
+
+	virtio_req_complete(req, len + sizeof(*header));
+	return 0;
+}
+
 static struct virtio_dev_ops net_ops = {
 	.check_features = net_check_features,
-	.enqueue = net_enqueue,
+//	.enqueue = net_enqueue,
+	.enqueue = net_bulk_enqueue,
 	.acquire_queue = net_acquire_queue,
 	.release_queue = net_release_queue,
 };
@@ -128,7 +181,7 @@ void poll_thread(void *arg)
 			virtio_process_queue(&np->dev->dev, 1);
 
 		/* XXX: need to relax thread */
-		clock_sleep(0, 0, 1000*1000); /* 1msec */
+//		clock_sleep(0, 0, 1000*1000); /* 1msec */
 	}
 }
 
@@ -241,9 +294,11 @@ int lkl_netdev_add(struct lkl_netdev *nd, void *mac)
 	}
 #endif /* LIBRUMPUSER */
 
+#if 0
 	nd->tx_tid = lkl_host_ops.thread_create(poll_thread, &dev->tx_poll);
 	if (nd->tx_tid == 0)
 		goto out_cleanup_dev;
+#endif
 
 	ret = dev_register(dev);
 	if (ret < 0)
