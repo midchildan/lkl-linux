@@ -5,6 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* FIXME */
+int *__errno(void);
+#undef errno
+#define errno (*__errno())
+
 static const char* PROMOTE = "$";
 #define str(x) #x
 #define xstr(s) str(s)
