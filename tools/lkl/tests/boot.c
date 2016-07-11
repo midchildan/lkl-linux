@@ -276,7 +276,7 @@ int test_stat(char *str, int len)
 	return TEST_FAILURE;
 }
 
-static union lkl_disk disk;
+static struct lkl_disk disk;
 static int disk_id = -1;
 
 int test_disk_add(char *str, int len)
@@ -291,7 +291,7 @@ int test_disk_add(char *str, int len)
 #endif
 		goto out_unlink;
 
-	disk_id = lkl_disk_add(disk);
+	disk_id = lkl_disk_add(&disk);
 	if (disk_id < 0)
 		goto out_close;
 
@@ -653,6 +653,7 @@ static int test_syscall_thread(char *str, int len)
 	int pipe_fds[2];
 	char tmp[LKL_PIPE_BUF+1];
 	long ret;
+	lkl_thread_t tid;
 
 	ret = lkl_sys_pipe2(pipe_fds, 0);
 	if (ret) {
@@ -666,8 +667,8 @@ static int test_syscall_thread(char *str, int len)
 		return TEST_FAILURE;
 	}
 
-	ret = lkl_host_ops.thread_create(test_thread, pipe_fds);
-	if (!ret) {
+	tid = lkl_host_ops.thread_create(test_thread, pipe_fds);
+	if (!tid) {
 		snprintf(str, len, "failed to create thread");
 		return TEST_FAILURE;
 	}
@@ -678,6 +679,12 @@ static int test_syscall_thread(char *str, int len)
 			snprintf(str, len, "write: %s", lkl_strerror(ret));
 		else
 			snprintf(str, len, "write: short write: %ld", ret);
+		return TEST_FAILURE;
+	}
+
+	ret = lkl_host_ops.thread_join(tid);
+	if (ret) {
+		snprintf(str, len, "failed to join thread");
 		return TEST_FAILURE;
 	}
 
@@ -814,7 +821,12 @@ int main(int argc, char **argv)
 
 	lkl_sys_halt();
 
+	lkl_disk_remove(disk);
+#ifdef __MINGW32__
+	CloseHandle(disk.handle);
+#else
 	close(disk.fd);
+#endif
 
 	return g_test_pass;
 }

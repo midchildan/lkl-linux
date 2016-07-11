@@ -5,6 +5,8 @@
 #include <lkl_host.h>
 #include "iomem.h"
 
+#define DIFF_1601_TO_1970_IN_100NS (11644473600L * 10000000L)
+
 struct lkl_mutex_t {
 	HANDLE mutex;
 };
@@ -117,14 +119,14 @@ static unsigned long long time_ns(void)
 {
 	SYSTEMTIME st;
 	FILETIME ft;
-	LARGE_INTEGER li;
+	ULARGE_INTEGER uli;
 
 	GetSystemTime(&st);
 	SystemTimeToFileTime(&st, &ft);
-	li.LowPart = ft.dwLowDateTime;
-	li.HighPart = ft.dwHighDateTime;
+	uli.LowPart = ft.dwLowDateTime;
+	uli.HighPart = ft.dwHighDateTime;
 
-	return li.QuadPart*100;
+	return (uli.QuadPart - DIFF_1601_TO_1970_IN_100NS) * 100;
 }
 
 struct timer {
@@ -235,7 +237,7 @@ struct lkl_host_operations lkl_host_ops = {
 	.gettid = gettid,
 };
 
-int handle_get_capacity(union lkl_disk disk, unsigned long long *res)
+int handle_get_capacity(struct lkl_disk disk, unsigned long long *res)
 {
 	LARGE_INTEGER tmp;
 
@@ -246,7 +248,7 @@ int handle_get_capacity(union lkl_disk disk, unsigned long long *res)
 	return 0;
 }
 
-static int blk_request(union lkl_disk disk, struct lkl_blk_req *req)
+static int blk_request(struct lkl_disk disk, struct lkl_blk_req *req)
 {
 	unsigned long long offset = req->sector * 512;
 	OVERLAPPED ov = { 0, };
