@@ -504,7 +504,7 @@ static off_t x8664_lseek(int fd, off_t offset, int whence)
 #define SEEK_END 2
 
 
-static int fd_get_capacity(union lkl_disk disk, unsigned long long *res)
+static int fd_get_capacity(struct lkl_disk disk, unsigned long long *res)
 {
 	off_t off;
 
@@ -517,7 +517,7 @@ static int fd_get_capacity(union lkl_disk disk, unsigned long long *res)
 	return 0;
 }
 
-static int blk_request(union lkl_disk disk, struct lkl_blk_req *req)
+static int blk_request(struct lkl_disk disk, struct lkl_blk_req *req)
 {
 	int err = 0;
 	struct iovec *iovec = (struct iovec *)req->buf;

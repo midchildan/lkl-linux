@@ -6,9 +6,11 @@
 #include <stdlib.h>
 
 /* FIXME */
+#ifdef LIBRUMPUSER
 int *__errno(void);
 #undef errno
 #define errno (*__errno())
+#endif
 
 static const char* PROMOTE = "$";
 #define str(x) #x
