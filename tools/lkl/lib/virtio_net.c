@@ -127,8 +127,10 @@ void poll_thread(void *arg)
 		if (ret & LKL_DEV_NET_POLL_TX)
 			virtio_process_queue(&np->dev->dev, 1);
 
+#ifdef LIBRUMPUSER
 		/* XXX: need to relax thread */
 		clock_sleep(0, 0, 1000*1000); /* 1msec */
+#endif
 	}
 }
 
