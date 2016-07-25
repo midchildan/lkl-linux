@@ -189,14 +189,6 @@ static int syscall_thread_data_init(struct syscall_thread_data *data,
 	return 0;
 }
 
-static int lkl_syscall_wouldblock(struct syscall_thread_data *data)
-{
-	if (!lkl_ops->sem_get)
-		return 0;
-
-	return !lkl_ops->sem_get(data->mutex);
-}
-
 static long __lkl_syscall(struct syscall_thread_data *data, long no,
 			  long *params)
 {
@@ -204,9 +196,6 @@ static long __lkl_syscall(struct syscall_thread_data *data, long no,
 
 	s.no = no;
 	s.params = params;
-
-	if (lkl_syscall_wouldblock(data))
-		lkl_puts("syscall would block");
 
 	lkl_ops->sem_down(data->mutex);
 	data->s = &s;
@@ -297,13 +286,17 @@ static int __lkl_stop_syscall_thread(struct syscall_thread_data *data,
 int lkl_stop_syscall_thread(void)
 {
 	struct syscall_thread_data *data = NULL;
+	int ret;
 
 	if (lkl_ops->tls_get)
 		data = lkl_ops->tls_get(syscall_thread_data_key);
 	if (!data)
 		return -EINVAL;
 
-	return __lkl_stop_syscall_thread(data, true);
+	ret = __lkl_stop_syscall_thread(data, true);
+	if (!ret && lkl_ops->tls_free)
+		lkl_ops->tls_free(syscall_thread_data_key);
+	return ret;
 }
 
 static int auto_syscall_threads = true;

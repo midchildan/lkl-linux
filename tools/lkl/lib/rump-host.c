@@ -366,7 +366,6 @@ struct lkl_host_operations lkl_host_ops = {
 	.sem_free = rump_sem_free,
 	.sem_up = rump_sem_up,
 	.sem_down = rump_sem_down,
-	.sem_get = rump_sem_get,
 	.mutex_alloc = rump_mutex_alloc,
 	.mutex_free = rump_mutex_free,
 	.mutex_lock = rump_mutex_lock,
