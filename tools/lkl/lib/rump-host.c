@@ -601,13 +601,13 @@ static int net_poll(struct lkl_netdev *nd, int events)
 		/* XXX: this should be poll(pfd, 1, -1) but fiber thread
 		 * needs to be done like this...
 		 */
-		int err = poll(&pfd, 1, 0);
+		int err = poll(&pfd, 1, -1);
 		if (err < 0 && errno == EINTR)
 			continue;
 		if (err > 0)
 			break;
 		/* will be woken by poll */
-		clock_sleep(CLOCK_REALTIME, 10, 0);
+//		clock_sleep(CLOCK_REALTIME, 10, 0);
 	}
 
 	if (pfd.revents & (POLLHUP | POLLNVAL))

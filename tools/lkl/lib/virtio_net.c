@@ -129,7 +129,7 @@ void poll_thread(void *arg)
 
 #ifdef LIBRUMPUSER
 		/* XXX: need to relax thread */
-		clock_sleep(0, 0, 1000*1000); /* 1msec */
+//		clock_sleep(0, 0, 1000*1000); /* 1msec */
 #endif
 	}
 }
@@ -243,9 +243,11 @@ int lkl_netdev_add(struct lkl_netdev *nd, void *mac)
 	}
 #endif /* LIBRUMPUSER */
 
+#if 0
 	nd->tx_tid = lkl_host_ops.thread_create(poll_thread, &dev->tx_poll);
 	if (nd->tx_tid == 0)
 		goto out_cleanup_dev;
+#endif
 
 	ret = dev_register(dev);
 	if (ret < 0)
