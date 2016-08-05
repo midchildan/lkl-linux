@@ -328,7 +328,7 @@ int test_netdev_add(char *str, int len)
 	struct lkl_netdev *netdev;
 	int ret = 0;
 
-	netdev = lkl_netdev_tap_create(cla.tap_ifname);
+	netdev = lkl_netdev_tap_create(cla.tap_ifname, 0);
 	if (!netdev)
 		goto out;
 

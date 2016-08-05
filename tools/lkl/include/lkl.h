@@ -223,9 +223,37 @@ int lkl_if_set_ipv4(int ifindex, unsigned int addr, unsigned int netmask_len);
 int lkl_set_ipv4_gateway(unsigned int addr);
 
 /**
+ * lkl_if_set_ipv6 - set IPv6 address on interface
+ *
+ * @ifindex - the ifindex of the interface
+ * @addr - 16-byte IPv6 address (i.e., struct in6_addr)
+ * @netprefix_len - prefix length of the @addr
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_if_set_ipv6(int ifindex, void* addr, unsigned int netprefix_len);
+
+/**
+ * lkl_set_ipv6_gateway - add an IPv6 default route
+ *
+ * @addr - 16-byte IPv6 address of the gateway (i.e., struct in6_addr)
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_set_ipv6_gateway(void* addr);
+
+/**
  * lkl_netdev - host network device handle, defined in lkl_host.h.
  */
 struct lkl_netdev;
+
+/**
+* lkl_netdev_args - arguments to lkl_netdev_add
+* @mac - optional MAC address for the device
+* @offload - offload bits for the device
+*/
+struct lkl_netdev_args {
+	void *mac;
+	unsigned int offload;
+};
 
 /**
  * lkl_netdev_add - add a new network device
@@ -233,11 +261,12 @@ struct lkl_netdev;
  * Must be called before calling lkl_start_kernel.
  *
  * @nd - the network device host handle
- * @mac - optional MAC address for the device
+ * @args - arguments that configs the netdev. Can be NULL
  * @returns a network device id (0 is valid) or a strictly negative value in
  * case of error
  */
-int lkl_netdev_add(struct lkl_netdev *nd, void *mac);
+
+int lkl_netdev_add(struct lkl_netdev *nd, struct lkl_netdev_args* args);
 
 /**
 * lkl_netdevs_remove - destroy all network devices
@@ -282,8 +311,9 @@ int lkl_stop_syscall_thread(void);
  *
  * @ifname - interface name for the TAP device. need to be configured
  * on host in advance
+ * @offload - offload bits for the device
  */
-struct lkl_netdev *lkl_netdev_tap_create(const char *ifname);
+struct lkl_netdev *lkl_netdev_tap_create(const char *ifname, int offload);
 
 /**
  * lkl_netdev_dpdk_create - create DPDK net_device for the virtio net backend
@@ -309,6 +339,16 @@ struct lkl_netdev *lkl_netdev_vde_create(const char *switch_path);
  */
 struct lkl_netdev *lkl_netdev_raw_create(const char *ifname);
 
+/**
+ * lkl_netdev_macvtap_create - create macvtap net_device for the virtio
+ * net backend
+ *
+ * @path - a file name for the macvtap device. need to be configured
+ * on host in advance
+ * @offload - offload bits for the device
+ */
+struct lkl_netdev *lkl_netdev_macvtap_create(const char *path, int offload);
+
 /*
  * lkl_register_dbg_handler- register a signal handler that loads a debug lib.
  *
@@ -321,12 +361,13 @@ struct lkl_netdev *lkl_netdev_raw_create(const char *ifname);
 void lkl_register_dbg_handler();
 
 /**
- * lkl_add_arp_entry - add a permanent arp entry
+ * lkl_add_neighbor - add a permanent arp entry
  * @ifindex - the ifindex of the interface
+ * @af - adress family of the ip address. Must be LKL_AF_INET or LKL_AF_INET6
  * @ip - ip address of the entry in network byte order
  * @mac - mac address of the entry
  */
-int lkl_add_arp_entry(int ifindex, unsigned int ip, void* mac);
+int lkl_add_neighbor(int ifindex, int af, void* addr, void* mac);
 
 #ifdef __cplusplus
 }
