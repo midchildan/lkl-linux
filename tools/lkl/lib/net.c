@@ -240,12 +240,12 @@ static int rtnl_talk(int fd, struct lkl_nlmsghdr *n)
 			return status;
 		}
 		if (status == 0) {
-			fprintf(stderr, "EOF on netlink\n");
+			lkl_printf("EOF on netlink\n");
 			return -1;
 		}
 		if (msg.msg_namelen != sizeof(nladdr)) {
-			fprintf(stderr, "sender address length == %d\n",
-				msg.msg_namelen);
+			lkl_printf("sender address length == %d\n",
+				   msg.msg_namelen);
 			return -1;
 		}
 		for (h = (struct lkl_nlmsghdr *)buf; status >= (int)sizeof(*h);) {
@@ -254,11 +254,11 @@ static int rtnl_talk(int fd, struct lkl_nlmsghdr *n)
 
 			if (l < 0 || len > status) {
 				if (msg.msg_flags & LKL_MSG_TRUNC) {
-					fprintf(stderr, "Truncated message\n");
+					lkl_printf("Truncated message\n");
 					return -1;
 				}
-				fprintf(stderr, "!!!malformed message: len=%d\n",
-					len);
+				lkl_printf("!!!malformed message: len=%d\n",
+					   len);
 				return -1;
 			}
 			if (nladdr.nl_pid != 0 || h->nlmsg_seq != seq++) {
@@ -273,16 +273,16 @@ static int rtnl_talk(int fd, struct lkl_nlmsghdr *n)
 				struct lkl_nlmsgerr *err =
 					(struct lkl_nlmsgerr *)LKL_NLMSG_DATA(h);
 				if (l < (int)sizeof(struct lkl_nlmsgerr)) {
-					fprintf(stderr, "ERROR truncated\n");
+					lkl_printf("ERROR truncated\n");
 				} else if (!err->error) {
 					return 0;
 				}
-				fprintf(stderr, "RTNETLINK answers: %s\n",
-					strerror(-err->error));
+				lkl_printf("RTNETLINK answers: %s\n",
+					   strerror(-err->error));
 				return -1;
 			}
 
-			fprintf(stderr, "Unexpected reply!!!\n");
+			lkl_printf("Unexpected reply!!!\n");
 
 			status -= LKL_NLMSG_ALIGN(len);
 			h = (struct lkl_nlmsghdr *)((char *)h +
@@ -290,12 +290,12 @@ static int rtnl_talk(int fd, struct lkl_nlmsghdr *n)
 		}
 
 		if (msg.msg_flags & LKL_MSG_TRUNC) {
-			fprintf(stderr, "Message truncated\n");
+			lkl_printf("Message truncated\n");
 			continue;
 		}
 
 		if (status) {
-			fprintf(stderr, "!!!Remnant of size %d\n", status);
+			lkl_printf("!!!Remnant of size %d\n", status);
 			return -1;
 		}
 	}
@@ -318,7 +318,7 @@ int lkl_add_neighbor(int ifindex, int af, void* ip, void* mac)
 	else if (af == LKL_AF_INET6)
 		addr_sz = 16;
 	else {
-		fprintf(stderr, "Bad address family: %d\n", af);
+		lkl_printf("Bad address family: %d\n", af);
 		return -1;
 	}
 	fd = lkl_sys_socket(LKL_AF_NETLINK, LKL_SOCK_DGRAM, LKL_NETLINK_ROUTE);
