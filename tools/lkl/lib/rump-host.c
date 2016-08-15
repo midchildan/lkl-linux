@@ -26,6 +26,7 @@
 #include <lkl_host.h>
 #include "iomem.h"
 
+#define BIT(x) (1ULL << x)
 
 /* FIXME */
 #define clock_sleep(a, b, c) __sched_clock_sleep(a, b, c)
@@ -58,17 +59,17 @@ struct rumpuser_sem {
 	struct rumpuser_cv *cond;
 };
 
-struct lkl_mutex_t {
+struct lkl_mutex {
 	struct rumpuser_mtx *mutex;
 };
 
-struct lkl_sem_t {
+struct lkl_sem {
 	struct rumpuser_sem sem;
 };
 
-static struct lkl_sem_t *rump_sem_alloc(int count)
+static struct lkl_sem *rump_sem_alloc(int count)
 {
-	struct lkl_sem_t *sem;
+	struct lkl_sem *sem;
 
 	rumpuser_malloc(sizeof(*sem), 0, (void **)&sem);
 	if (!sem)
@@ -81,7 +82,7 @@ static struct lkl_sem_t *rump_sem_alloc(int count)
 	return sem;
 }
 
-static void rump_sem_free(struct lkl_sem_t *_sem)
+static void rump_sem_free(struct lkl_sem *_sem)
 {
 	struct rumpuser_sem *sem = (struct rumpuser_sem *)&_sem->sem;
 
@@ -90,7 +91,7 @@ static void rump_sem_free(struct lkl_sem_t *_sem)
 	rumpuser_free(sem, 0);
 }
 
-static void rump_sem_up(struct lkl_sem_t *_sem)
+static void rump_sem_up(struct lkl_sem *_sem)
 {
 	struct rumpuser_sem *sem = (struct rumpuser_sem *)&_sem->sem;
 
@@ -101,7 +102,7 @@ static void rump_sem_up(struct lkl_sem_t *_sem)
 	rumpuser_mutex_exit(sem->lock);
 }
 
-static void rump_sem_down(struct lkl_sem_t *_sem)
+static void rump_sem_down(struct lkl_sem *_sem)
 {
 	struct rumpuser_sem *sem = (struct rumpuser_sem *)&_sem->sem;
 
@@ -112,20 +113,9 @@ static void rump_sem_down(struct lkl_sem_t *_sem)
 	rumpuser_mutex_exit(sem->lock);
 }
 
-static int rump_sem_get(struct lkl_sem_t *_sem)
+static struct lkl_mutex *rump_mutex_alloc(void)
 {
-	struct rumpuser_sem *sem = (struct rumpuser_sem *)&_sem->sem;
-	int v = 0;
-
-	rumpuser_mutex_enter(sem->lock);
-	v = sem->count;
-	rumpuser_mutex_exit(sem->lock);
-	return v;
-}
-
-static struct lkl_mutex_t *rump_mutex_alloc(void)
-{
-	struct lkl_mutex_t *_mutex;
+	struct lkl_mutex *_mutex;
 
 	rumpuser_malloc(sizeof(*_mutex), 0, (void **)&_mutex);
 	if (!_mutex)
@@ -136,17 +126,17 @@ static struct lkl_mutex_t *rump_mutex_alloc(void)
 	return _mutex;
 }
 
-static void rump_mutex_lock(struct lkl_mutex_t *_mutex)
+static void rump_mutex_lock(struct lkl_mutex *_mutex)
 {
 	rumpuser_mutex_enter(_mutex->mutex);
 }
 
-static void rump_mutex_unlock(struct lkl_mutex_t *_mutex)
+static void rump_mutex_unlock(struct lkl_mutex *_mutex)
 {
 	rumpuser_mutex_exit(_mutex->mutex);
 }
 
-static void rump_mutex_free(struct lkl_mutex_t *_mutex)
+static void rump_mutex_free(struct lkl_mutex *_mutex)
 {
 	rumpuser_mutex_destroy(_mutex->mutex);
 	rumpuser_free(_mutex, 0);
@@ -385,7 +375,7 @@ struct lkl_host_operations lkl_host_ops = {
 	.iomem_access = lkl_iomem_access,
 	.irq_request = rump_pci_irq_request,
 	.irq_release = rump_pci_irq_release,
-	.getparam = rumpuser_getparam,
+	.getparam = (int (*)(const char *, void *, int))rumpuser_getparam,
 #ifndef RUMPRUN
 	.virtio_devices = lkl_virtio_devs,
 #endif
@@ -531,11 +521,7 @@ static int blk_request(struct lkl_disk disk, struct lkl_blk_req *req)
 		break;
 	case LKL_DEV_BLK_TYPE_FLUSH:
 	case LKL_DEV_BLK_TYPE_FLUSH_OUT:
-#ifdef __linux__
-		err = fdatasync(disk.fd);
-#else
 		err = fsync(disk.fd);
-#endif
 		break;
 	default:
 		return LKL_DEV_BLK_STATUS_UNSUP;
@@ -558,32 +544,41 @@ struct lkl_netdev_rumpfd {
 	int fd;
 };
 
-static int net_tx(struct lkl_netdev *nd, void *data, int len)
+static int rump_net_tx(struct lkl_netdev *nd,
+		       struct lkl_dev_buf *iov, int cnt)
 {
 	struct lkl_netdev_rumpfd *nd_rumpfd =
 		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	int ret;
 
-	ret = write(nd_rumpfd->fd, data, len);
-	if (ret <= 0 && errno == -EAGAIN)
-		return -1;
-	return 0;
+	do {
+		ret = writev(nd_rumpfd->fd, (struct iovec *)iov, cnt);
+	} while (ret == -1 && (errno == EINTR));
+
+	if (ret < 0)
+		lkl_perror("write to rump fd netdev fails", errno);
+
+	return ret;
 }
 
-static int net_rx(struct lkl_netdev *nd, void *data, int *len)
+static int rump_net_rx(struct lkl_netdev *nd,
+		       struct lkl_dev_buf *iov, int cnt)
 {
 	struct lkl_netdev_rumpfd *nd_rumpfd =
 		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	int ret;
 
-	ret = read(nd_rumpfd->fd, data, *len);
+	do {
+		ret = readv(nd_rumpfd->fd, (struct iovec *)iov, cnt);
+	} while (ret == -1 && errno == EINTR);
+
 	if (ret <= 0)
 		return -1;
-	*len = ret;
-	return 0;
+
+	return ret;
 }
 
-static int net_poll(struct lkl_netdev *nd, int events)
+static int rump_net_poll(struct lkl_netdev *nd, int events)
 {
 	struct lkl_netdev_rumpfd *nd_rumpfd =
 		container_of(nd, struct lkl_netdev_rumpfd, dev);
@@ -622,12 +617,13 @@ static int net_poll(struct lkl_netdev *nd, int events)
 }
 
 struct lkl_dev_net_ops rumpfd_ops = {
-	.tx = net_tx,
-	.rx = net_rx,
-	.poll = net_poll,
+	.tx = rump_net_tx,
+	.rx = rump_net_rx,
+	.poll = rump_net_poll,
 };
 
-struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd)
+struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd,
+					    struct lkl_netdev_args *args)
 {
 	struct lkl_netdev_rumpfd *nd;
 
@@ -638,8 +634,16 @@ struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd)
 		return NULL;
 	}
 
+	memset(args, 0, sizeof(struct lkl_netdev_args));
+	/* XXX: Should be configurable */
+	args->offload  = BIT(LKL_VIRTIO_NET_F_GUEST_CSUM) |
+		BIT(LKL_VIRTIO_NET_F_GUEST_TSO4) |
+		BIT(LKL_VIRTIO_NET_F_MRG_RXBUF) | BIT(LKL_VIRTIO_NET_F_CSUM) |
+		BIT(LKL_VIRTIO_NET_F_HOST_TSO4);
+
 	nd->fd = fd;
 	nd->dev.ops = &rumpfd_ops;
+	nd->dev.has_vnet_hdr = 1;
 	return (struct lkl_netdev *)nd;
 }
 #endif

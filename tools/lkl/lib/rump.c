@@ -205,6 +205,7 @@ rump_libos_hyp_getpid(void)
 
 	return ti->task->pid;
 #endif
+	return -1;
 }
 
 static void rump_libos_user_unschedule(int nlocks, int *countp,
