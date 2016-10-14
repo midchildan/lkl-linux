@@ -1,15 +1,23 @@
 #!/usr/bin/env python
 import re, os, sys, argparse, multiprocessing, fnmatch
 
+srctree = os.environ["srctree"]
+objtree = os.environ["objtree"]
 header_paths = [ "include/uapi/", "arch/lkl/include/uapi/",
                  "arch/lkl/include/generated/uapi/", "include/generated/" ]
 
 headers = set()
 includes = set()
 
+def relpath2abspath(relpath):
+    if "generated" in relpath:
+        return objtree + "/" + relpath
+    else:
+        return srctree + "/" + relpath
+
 def find_headers(path):
     headers.add(path)
-    f = open(path)
+    f = open(relpath2abspath(path))
     for l in f.readlines():
         m = re.search("#include <(.*)>", l)
         try:
@@ -19,7 +27,7 @@ def find_headers(path):
                     p = args.path.replace("tools/lkl/include","") + "/" + p
                 else:
                     p = args.srctree + "/" + p
-                if os.access(p + i, os.R_OK):
+                if os.access(relpath2abspath(p + i), os.R_OK):
                     if p + i not in headers:
                         includes.add(i)
                         headers.add(p + i)
@@ -59,7 +67,13 @@ def find_enums(block_regexp, symbol_regexp, store):
     for h in headers:
         # remove comments
         content = re.sub(re.compile("(\/\*(\*(?!\/)|[^*])*\*\/)", re.S|re.M), " ", open(h).read())
-        for i in block_regexp.finditer(content):
+        # remove preprocesor lines
+        clean_content = ""
+        for l in content.split("\n"):
+            if re.match("\s*#", l):
+                continue
+            clean_content += l + "\n"
+        for i in block_regexp.finditer(clean_content):
             for j in reversed(i.groups()):
                 if j:
                     for k in symbol_regexp.finditer(j):
@@ -124,14 +138,14 @@ new_headers = set()
 
 for h in headers:
     dir = os.path.dirname(h)
+    copyfromdir = os.path.dirname(relpath2abspath(h))
     out_dir = args.path + "/" + re.sub("(arch/lkl/include/uapi/|arch/lkl/include/generated/uapi/|include/uapi/|include/generated/uapi/|include/generated)(.*)", "lkl/\\2", dir.replace(args.srctree, "").replace(args.path.replace("tools/lkl/include",""), ""))
-
     try:
         os.makedirs(out_dir)
     except:
         pass
     print("  INSTALL\t%s" % (out_dir + "/" + os.path.basename(h)))
-    os.system(args.srctree + "/" + "scripts/headers_install.sh %s %s %s" % (out_dir, dir,
+    os.system(args.srctree + "/" + "scripts/headers_install.sh %s %s %s" % (out_dir, copyfromdir,
                                                        os.path.basename(h)))
     new_headers.add(out_dir + "/" + os.path.basename(h))
 

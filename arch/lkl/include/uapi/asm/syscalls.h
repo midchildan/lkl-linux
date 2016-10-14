@@ -60,6 +60,8 @@ typedef __s64			s64;
 #define __NR_newfstatat __NR3264_fstatat
 #endif
 
+#define __NR_mmap_pgoff __NR3264_mmap
+
 #include <linux/time.h>
 #include <linux/times.h>
 #include <linux/timex.h>
@@ -98,6 +100,11 @@ struct sockaddr {
 	char sa_data[14];
 };
 
+#define __UAPI_DEF_IF_NET_DEVICE_FLAGS_LOWER_UP_DORMANT_ECHO 1
+#define __UAPI_DEF_IF_IFNAMSIZ	1
+#define __UAPI_DEF_IF_NET_DEVICE_FLAGS 1
+#define __UAPI_DEF_IF_IFREQ	1
+#define __UAPI_DEF_IF_IFMAP	1
 #include <linux/if.h>
 #define __UAPI_DEF_IN_IPPROTO	1
 #define __UAPI_DEF_IN_ADDR	1

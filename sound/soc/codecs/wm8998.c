@@ -1166,6 +1166,7 @@ static const struct snd_soc_dapm_route wm8998_dapm_routes[] = {
 
 	{ "MICSUPP", NULL, "SYSCLK" },
 
+	{ "DRC1 Signal Activity", NULL, "SYSCLK" },
 	{ "DRC1 Signal Activity", NULL, "DRC1L" },
 	{ "DRC1 Signal Activity", NULL, "DRC1R" },
 };
@@ -1323,6 +1324,8 @@ static int wm8998_codec_remove(struct snd_soc_codec *codec)
 	struct wm8998_priv *priv = snd_soc_codec_get_drvdata(codec);
 
 	priv->core.arizona->dapm = NULL;
+
+	arizona_free_spk(codec);
 
 	return 0;
 }

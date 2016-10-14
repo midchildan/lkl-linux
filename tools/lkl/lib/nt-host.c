@@ -84,29 +84,32 @@ static void thread_exit(void)
 static int thread_join(lkl_thread_t tid)
 {
 	/* TODO: error handling */
-	WaitForSingleObject(tid, INFINITE);
+	WaitForSingleObject((void *)tid, INFINITE);
 	return 0;
 }
 
-static int tls_alloc(unsigned int *key)
+static int tls_alloc(unsigned int *key, void (*destructor)(void *))
 {
-	*key = TlsAlloc();
+	*key = FlsAlloc((PFLS_CALLBACK_FUNCTION)destructor);
 	return *key == TLS_OUT_OF_INDEXES ? -1 : 0;
 }
 
 static int tls_free(unsigned int key)
 {
-	return TlsFree(key) ? 0 : -1;
+	/* setting to NULL first to prevent the callback from being called */
+	if (!FlsSetValue(key, NULL))
+		return -1;
+	return FlsFree(key) ? 0 : -1;
 }
 
 static int tls_set(unsigned int key, void *data)
 {
-	return TlsSetValue(key, data) ? 0 : -1;
+	return FlsSetValue(key, data) ? 0 : -1;
 }
 
 static void *tls_get(unsigned int key)
 {
-	return TlsGetValue(key);
+	return FlsGetValue(key);
 }
 
 
@@ -262,16 +265,17 @@ static int blk_request(struct lkl_disk disk, struct lkl_blk_req *req)
 
 		for (i = 0; i < req->count; i++) {
 			DWORD res;
+			struct iovec *buf = &req->buf[i];
 
 			ov.Offset = offset & 0xffffffff;
 			ov.OffsetHigh = offset >> 32;
 
 			if (req->type == LKL_DEV_BLK_TYPE_READ)
-				ret = ReadFile(disk.handle, req->buf[i].addr,
-					       req->buf[i].len, &res, &ov);
+				ret = ReadFile(disk.handle, buf->iov_base,
+					       buf->iov_len, &res, &ov);
 			else
-				ret = WriteFile(disk.handle, req->buf[i].addr,
-						req->buf[i].len, &res, &ov);
+				ret = WriteFile(disk.handle, buf->iov_base,
+						buf->iov_len, &res, &ov);
 			if (!ret) {
 				lkl_printf("%s: I/O error: %d\n", __func__,
 					   GetLastError());
@@ -279,14 +283,14 @@ static int blk_request(struct lkl_disk disk, struct lkl_blk_req *req)
 				goto out;
 			}
 
-			if (res != req->buf[i].len) {
+			if (res != buf->iov_len) {
 				lkl_printf("%s: I/O error: short: %d %d\n",
-					   res, req->buf[i].len);
+					   res, buf->iov_len);
 				err = -1;
 				goto out;
 			}
 
-			offset += req->buf[i].len;
+			offset += buf->iov_len;
 		}
 		break;
 	}

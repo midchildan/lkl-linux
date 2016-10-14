@@ -21,7 +21,7 @@ static int blk_check_features(struct virtio_dev *dev)
 	return -LKL_EINVAL;
 }
 
-static int blk_enqueue(struct virtio_dev *dev, struct virtio_req *req)
+static int blk_enqueue(struct virtio_dev *dev, int q, struct virtio_req *req)
 {
 	struct virtio_blk_dev *blk_dev;
 	struct lkl_virtio_blk_outhdr *h;
@@ -33,18 +33,18 @@ static int blk_enqueue(struct virtio_dev *dev, struct virtio_req *req)
 		goto out;
 	}
 
-	h = req->buf[0].addr;
-	t = req->buf[req->buf_count - 1].addr;
+	h = req->buf[0].iov_base;
+	t = req->buf[req->buf_count - 1].iov_base;
 	blk_dev = container_of(dev, struct virtio_blk_dev, dev);
 
 	t->status = LKL_DEV_BLK_STATUS_IOERR;
 
-	if (req->buf[0].len != sizeof(*h)) {
+	if (req->buf[0].iov_len != sizeof(*h)) {
 		lkl_printf("virtio_blk: bad header buf\n");
 		goto out;
 	}
 
-	if (req->buf[req->buf_count - 1].len != sizeof(*t)) {
+	if (req->buf[req->buf_count - 1].iov_len != sizeof(*t)) {
 		lkl_printf("virtio_blk: bad status buf\n");
 		goto out;
 	}
@@ -73,7 +73,6 @@ int lkl_disk_add(struct lkl_disk *disk)
 	struct virtio_blk_dev *dev;
 	unsigned long long capacity;
 	int ret;
-	static int count;
 
 	dev = lkl_host_ops.mem_alloc(sizeof(*dev));
 	if (!dev)
@@ -96,13 +95,13 @@ int lkl_disk_add(struct lkl_disk *disk)
 		ret = -LKL_ENOMEM;
 		goto out_free;
 	}
-	dev->config.capacity = capacity;
+	dev->config.capacity = capacity / 512;
 
 	ret = virtio_dev_setup(&dev->dev, 1, 32);
 	if (ret)
 		goto out_free;
 
-	return count++;
+	return dev->dev.virtio_mmio_id;
 
 out_free:
 	lkl_host_ops.mem_free(dev);
@@ -110,14 +109,20 @@ out_free:
 	return ret;
 }
 
-void lkl_disk_remove(struct lkl_disk disk)
+int lkl_disk_remove(struct lkl_disk disk)
 {
 	struct virtio_blk_dev *dev;
+	int ret;
 
 	dev = (struct virtio_blk_dev *)disk.dev;
 	if (!dev)
-		return;
+		return -LKL_EINVAL;
 
-	virtio_dev_cleanup(&dev->dev);
+	ret = virtio_dev_cleanup(&dev->dev);
+	if (ret < 0)
+		return ret;
+
 	lkl_host_ops.mem_free(dev);
+
+	return 0;
 }

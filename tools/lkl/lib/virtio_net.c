@@ -8,6 +8,10 @@
 #define netdev_of(x) (container_of(x, struct virtio_net_dev, dev))
 #define BIT(x) (1ULL << x)
 
+/* We always have 2 queues on a netdev: one for tx, one for rx. */
+#define RX_QUEUE_IDX 0
+#define TX_QUEUE_IDX 1
+
 #define NUM_QUEUES (TX_QUEUE_IDX + 1)
 #define QUEUE_DEPTH 128
 
@@ -24,18 +28,12 @@
 #define bad_request(s) lkl_printf("virtio_net: %s\n", s);
 #endif /* DEBUG */
 
-struct virtio_net_poll {
-	struct virtio_net_dev *dev;
-	int event;
-};
-
 struct virtio_net_dev {
 	struct virtio_dev dev;
 	struct lkl_virtio_net_config config;
-	struct lkl_dev_net_ops *ops;
 	struct lkl_netdev *nd;
-	struct virtio_net_poll rx_poll, tx_poll;
 	struct lkl_mutex **queue_locks;
+	lkl_thread_t poll_tid;
 };
 
 static int net_check_features(struct virtio_dev *dev)
@@ -56,68 +54,68 @@ static void net_release_queue(struct virtio_dev *dev, int queue_idx)
 	lkl_host_ops.mutex_unlock(netdev_of(dev)->queue_locks[queue_idx]);
 }
 
-/* The buffers passed through "req" from the virtio_net driver always
- * starts with a vnet_hdr. We need to check the backend device if it
- * expects vnet_hdr and adjust buffer offset accordingly.
+/*
+ * The buffers passed through "req" from the virtio_net driver always starts
+ * with a vnet_hdr. We need to check the backend device if it expects vnet_hdr
+ * and adjust buffer offset accordingly.
  */
-static int net_enqueue(struct virtio_dev *dev, struct virtio_req *req)
+static int net_enqueue(struct virtio_dev *dev, int q, struct virtio_req *req)
 {
 	struct lkl_virtio_net_hdr_v1 *header;
 	struct virtio_net_dev *net_dev;
-	int ret, len, i;
-	struct lkl_dev_buf *iov;
+	struct iovec *iov;
+	int ret;
 
-	header = req->buf[0].addr;
+	header = req->buf[0].iov_base;
 	net_dev = netdev_of(dev);
+	/*
+	 * The backend device does not expect a vnet_hdr so adjust buf
+	 * accordingly. (We make adjustment to req->buf so it can be used
+	 * directly for the tx/rx call but remember to undo the change after the
+	 * call.  Note that it's ok to pass iov with entry's len==0.  The caller
+	 * will skip to the next entry correctly.
+	 */
 	if (!net_dev->nd->has_vnet_hdr) {
-		/* The backend device does not expect a vnet_hdr so adjust
-		 * buf accordingly. (We make adjustment to req->buf so it
-		 * can be used directly for the tx/rx call but remember to
-		 * undo the change after the call.
-		 * Note that it's ok to pass iov with entry's len==0.
-		 * The caller will skip to the next entry correctly.
-		 */
-		req->buf[0].addr += sizeof(*header);
-		req->buf[0].len -= sizeof(*header);
+		req->buf[0].iov_base += sizeof(*header);
+		req->buf[0].iov_len -= sizeof(*header);
 	}
 	iov = req->buf;
 
 	/* Pick which virtqueue to send the buffer(s) to */
-	if (is_tx_queue(dev, req->q)) {
-		ret = net_dev->ops->tx(net_dev->nd, iov, req->buf_count);
+	if (q == TX_QUEUE_IDX) {
+		ret = net_dev->nd->ops->tx(net_dev->nd, iov, req->buf_count);
 		if (ret < 0)
 			return -1;
-		i = 1;
-	} else if (is_rx_queue(dev, req->q)) {
-		ret = net_dev->ops->rx(net_dev->nd, iov, req->buf_count);
+	} else if (q == RX_QUEUE_IDX) {
+		int i, len;
+
+		ret = net_dev->nd->ops->rx(net_dev->nd, iov, req->buf_count);
 		if (ret < 0)
 			return -1;
 		if (net_dev->nd->has_vnet_hdr) {
-
-			/* if the number of bytes returned exactly matches
-			 * the total space in the iov then there is a good
-			 * chance we did not supply a large enough buffer for
-			 * the whole pkt, i.e., pkt has been truncated.
-			 * This is only likely to happen under mergeable RX
-			 * buffer mode.
+			/*
+			 * If the number of bytes returned exactly matches the
+			 * total space in the iov then there is a good chance we
+			 * did not supply a large enough buffer for the whole
+			 * pkt, i.e., pkt has been truncated.  This is only
+			 * likely to happen under mergeable RX buffer mode.
 			 */
-			if (req->mergeable_rx_len == (unsigned int)ret)
+			if (req->total_len == (unsigned int)ret)
 				lkl_printf("PKT is likely truncated! len=%d\n",
 				    ret);
 		} else {
 			header->flags = 0;
 			header->gso_type = LKL_VIRTIO_NET_HDR_GSO_NONE;
 		}
-		/* Have to compute how many descriptors we've consumed (really
+		/*
+		 * Have to compute how many descriptors we've consumed (really
 		 * only matters to the the mergeable RX mode) and return it
 		 * through "num_buffers".
 		 */
 		for (i = 0, len = ret; len > 0; i++)
-			len -= req->buf[i].len;
-		req->buf_count = header->num_buffers = i;
-		/* Need to set "buf_count" to how many we really used in
-		 * order for virtio_req_complete() to work.
-		 */
+			len -= req->buf[i].iov_len;
+		header->num_buffers = i;
+
 		if (dev->device_features & BIT(LKL_VIRTIO_NET_F_GUEST_CSUM))
 			header->flags = LKL_VIRTIO_NET_HDR_F_DATA_VALID;
 	} else {
@@ -126,12 +124,12 @@ static int net_enqueue(struct virtio_dev *dev, struct virtio_req *req)
 	}
 	if (!net_dev->nd->has_vnet_hdr) {
 		/* Undo the adjustment */
-		req->buf[0].addr -= sizeof(*header);
-		req->buf[0].len += sizeof(*header);
+		req->buf[0].iov_base -= sizeof(*header);
+		req->buf[0].iov_len += sizeof(*header);
 		ret += sizeof(struct lkl_virtio_net_hdr_v1);
 	}
 	virtio_req_complete(req, ret);
-	return i;
+	return 0;
 }
 
 static struct virtio_dev_ops net_ops = {
@@ -145,21 +143,28 @@ static struct virtio_dev_ops net_ops = {
 int clock_sleep(int clk, int64_t sec, long nsec);
 void poll_thread(void *arg)
 {
-	struct virtio_net_poll *np = (struct virtio_net_poll *)arg;
-	int ret;
+	struct virtio_net_dev *dev = arg;
 
 	/* Synchronization is handled in virtio_process_queue */
-	while ((ret = np->dev->ops->poll(np->dev->nd, np->event)) >= 0) {
+	do {
+		int ret = dev->nd->ops->poll(dev->nd);
+
+		if (ret < 0) {
+			lkl_printf("virtio net poll error: %d\n", ret);
+			continue;
+		}
+		if (ret & LKL_DEV_NET_POLL_HUP)
+			break;
 		if (ret & LKL_DEV_NET_POLL_RX)
-			virtio_process_queue(&np->dev->dev, 0);
+			virtio_process_queue(&dev->dev, 0);
 		if (ret & LKL_DEV_NET_POLL_TX)
-			virtio_process_queue(&np->dev->dev, 1);
+			virtio_process_queue(&dev->dev, 1);
 
 #ifdef LIBRUMPUSER
 		/* XXX: need to relax thread */
 //		clock_sleep(0, 0, 1000*1000); /* 1msec */
 #endif
-	}
+	} while (1);
 }
 
 void franken_recv_thread(int fd, void *thrid);
@@ -233,31 +238,29 @@ int lkl_netdev_add(struct lkl_netdev *nd, struct lkl_netdev_args* args)
 	dev->dev.config_data = &dev->config;
 	dev->dev.config_len = sizeof(dev->config);
 	dev->dev.ops = &net_ops;
-	dev->ops = nd->ops;
 	dev->nd = nd;
 	dev->queue_locks = init_queue_locks(NUM_QUEUES);
 
 	if (!dev->queue_locks)
 		goto out_free;
 
-	dev->rx_poll.event = LKL_DEV_NET_POLL_RX;
-	dev->rx_poll.dev = dev;
-
-	dev->tx_poll.event = LKL_DEV_NET_POLL_TX;
-	dev->tx_poll.dev = dev;
-
-	/* MUST match the number of queue locks we initialized. We
-	 * could init the queues in virtio_dev_setup to help enforce
-	 * this, but netdevs are the only flavor that need these
-	 * locks, so it's better to do it here. */
+	/*
+	 * MUST match the number of queue locks we initialized. We could init
+	 * the queues in virtio_dev_setup to help enforce this, but netdevs are
+	 * the only flavor that need these locks, so it's better to do it
+	 * here.
+	 */
 	ret = virtio_dev_setup(&dev->dev, NUM_QUEUES, QUEUE_DEPTH);
 
 	if (ret)
 		goto out_free;
 
-	nd->rx_tid = lkl_host_ops.thread_create(poll_thread, &dev->rx_poll);
-	if (nd->rx_tid == 0)
-		goto out_cleanup_dev;
+	/*
+	 * We may receive upto 64KB TSO packet so collect as many descriptors as
+	 * there are available up to 64KB in total len.
+	 */
+	if (dev->dev.device_features & BIT(LKL_VIRTIO_NET_F_MRG_RXBUF))
+		virtio_set_queue_max_merge_len(&dev->dev, RX_QUEUE_IDX, 65536);
 
 	/* XXX: only for rump: need to use this semantics for franken_poll(2) */
 #ifdef LIBRUMPUSER
@@ -275,8 +278,8 @@ int lkl_netdev_add(struct lkl_netdev *nd, struct lkl_netdev_args* args)
 #endif /* LIBRUMPUSER */
 
 #if 0
-	nd->tx_tid = lkl_host_ops.thread_create(poll_thread, &dev->tx_poll);
-	if (nd->tx_tid == 0)
+	dev->poll_tid = lkl_host_ops.thread_create(poll_thread, dev);
+	if (dev->poll_tid == 0)
 		goto out_cleanup_dev;
 #endif
 
@@ -298,38 +301,42 @@ out_free:
 }
 
 /* Return 0 for success, -1 for failure. */
-static int lkl_netdev_remove(struct virtio_net_dev *dev)
+void lkl_netdev_remove(int id)
 {
-	if (!dev->nd->ops->close)
-		/* Can't kill the poll threads, so we can't do
-		 * anything safely. */
-		return -1;
+	struct virtio_net_dev *dev;
+	int ret;
 
-	if (dev->nd->ops->close(dev->nd) < 0)
-		/* Something went wrong */
-		return -1;
+	if (id >= registered_dev_idx) {
+		lkl_printf("%s: invalid id: %d\n", __func__, id);
+		return;
+	}
+
+	dev = registered_devs[id];
+
+	dev->nd->ops->poll_hup(dev->nd);
+	lkl_host_ops.thread_join(dev->poll_tid);
+
+	ret = lkl_netdev_get_ifindex(id);
+	if (ret < 0) {
+		lkl_printf("%s: failed to get ifindex for id %d: %s\n",
+			   __func__, id, lkl_strerror(ret));
+		return;
+	}
+
+	ret = lkl_if_down(ret);
+	if (ret < 0) {
+		lkl_printf("%s: failed to put interface id %d down: %s\n",
+			   __func__, id, lkl_strerror(ret));
+		return;
+	}
 
 	virtio_dev_cleanup(&dev->dev);
 
-	lkl_host_ops.mem_free(dev->nd);
 	free_queue_locks(dev->queue_locks, NUM_QUEUES);
 	lkl_host_ops.mem_free(dev);
-
-	return 0;
 }
 
-int lkl_netdevs_remove(void)
+void lkl_netdev_free(struct lkl_netdev *nd)
 {
-	int i = 0, failure_count = 0;
-
-	for (; i < registered_dev_idx; i++)
-		failure_count -= lkl_netdev_remove(registered_devs[i]);
-
-	if (failure_count) {
-		lkl_printf("WARN: failed to free %d of %d netdevs.\n",
-			failure_count, registered_dev_idx);
-		return -1;
-	}
-
-	return 0;
+	nd->ops->free(nd);
 }

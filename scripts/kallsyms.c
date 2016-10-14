@@ -60,11 +60,11 @@ static struct addr_range percpu_range = {
 
 static struct sym_entry *table;
 static unsigned int table_size, table_cnt;
-static int all_symbols = 0;
-static int absolute_percpu = 0;
+static int all_symbols;
+static int use_data_section;
+static int absolute_percpu;
 static char symbol_prefix_char = '\0';
-static unsigned long long kernel_start_addr = 0;
-static int base_relative = 0;
+static int base_relative;
 
 int token_profit[0x10000];
 
@@ -76,6 +76,7 @@ unsigned char best_table_len[256];
 static void usage(void)
 {
 	fprintf(stderr, "Usage: kallsyms [--all-symbols] "
+			"[--use-data-section] "
 			"[--symbol-prefix=<prefix char>] "
 			"[--page-offset=<CONFIG_PAGE_OFFSET>] "
 			"[--base-relative] < in.map > out.S\n");
@@ -223,14 +224,12 @@ static int symbol_valid(struct sym_entry *s)
 
 	static char *special_suffixes[] = {
 		"_veneer",		/* arm */
+		"_from_arm",		/* arm */
+		"_from_thumb",		/* arm */
 		NULL };
 
 	int i;
 	char *sym_name = (char *)s->sym + 1;
-
-
-	if (s->addr < kernel_start_addr)
-		return 0;
 
 	/* skip prefix char */
 	if (symbol_prefix_char && *sym_name == symbol_prefix_char)
@@ -352,7 +351,10 @@ static void write_src(void)
 	printf("#define ALGN .align 4\n");
 	printf("#endif\n");
 
-	printf("\t.section .rodata, \"a\"\n");
+	if (use_data_section)
+		printf("\t.section .data\n");
+	else
+		printf("\t.section .rodata, \"a\"\n");
 
 	/* Provide proper symbols relocatability by their relativeness
 	 * to a fixed anchor point in the runtime image, either '_text'
@@ -759,15 +761,14 @@ int main(int argc, char **argv)
 				all_symbols = 1;
 			else if (strcmp(argv[i], "--absolute-percpu") == 0)
 				absolute_percpu = 1;
+			else if (strcmp(argv[i], "--use-data-section") == 0)
+				use_data_section = 1;
 			else if (strncmp(argv[i], "--symbol-prefix=", 16) == 0) {
 				char *p = &argv[i][16];
 				/* skip quote */
 				if ((*p == '"' && *(p+2) == '"') || (*p == '\'' && *(p+2) == '\''))
 					p++;
 				symbol_prefix_char = *p;
-			} else if (strncmp(argv[i], "--page-offset=", 14) == 0) {
-				const char *p = &argv[i][14];
-				kernel_start_addr = strtoull(p, NULL, 16);
 			} else if (strcmp(argv[i], "--base-relative") == 0)
 				base_relative = 1;
 			else

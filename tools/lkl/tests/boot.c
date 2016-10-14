@@ -112,6 +112,59 @@ int test_getpid(char *str, int len)
 	return TEST_FAILURE;
 }
 
+void check_latency(long (*f)(void), long *min, long *max, long *avg)
+{
+	int i;
+	unsigned long long start, stop, sum = 0;
+	static const int count = 1000;
+	long delta;
+
+	*min = 1000000000;
+	*max = -1;
+
+	for (i = 0; i < count; i++) {
+		start = lkl_host_ops.time();
+		f();
+		stop = lkl_host_ops.time();
+		delta = stop - start;
+		if (*min > delta)
+			*min = delta;
+		if (*max < delta)
+			*max = delta;
+		sum += delta;
+	}
+	*avg = sum / count;
+}
+
+static long native_getpid(void)
+{
+#ifdef __MINGW32__
+	GetCurrentProcessId();
+#else
+	getpid();
+#endif
+	return 0;
+}
+
+int test_syscall_latency(char *str, int len)
+{
+	long min, max, avg;
+	int tmp;
+
+	check_latency(lkl_sys_getpid, &min, &max, &avg);
+
+	tmp = snprintf(str, len, "avg/min/max lkl: %ld/%ld/%ld ",
+		       avg, min, max);
+	str += tmp;
+	len -= tmp;
+
+	check_latency(native_getpid, &min, &max, &avg);
+
+	snprintf(str, len, "native: %ld/%ld/%ld", avg, min, max);
+
+	return TEST_SUCCESS;
+}
+
 #define access_rights 0721
 
 int test_creat(char *str, int len)
@@ -485,7 +538,7 @@ static int test_epoll(char *str, int len)
 
 static char mnt_point[32];
 
-static int test_mount(char *str, int len)
+static int test_mount_dev(char *str, int len)
 {
 	long ret;
 
@@ -500,11 +553,11 @@ static int test_mount(char *str, int len)
 	return TEST_FAILURE;
 }
 
-static int test_chdir(char *str, int len)
+static int test_chdir(char *str, int len, const char *path)
 {
 	long ret;
 
-	ret = lkl_sys_chdir(mnt_point);
+	ret = lkl_sys_chdir(path);
 
 	snprintf(str, len, "%ld", ret);
 
@@ -556,7 +609,7 @@ static int test_getdents64(char *str, int len)
 	return TEST_SUCCESS;
 }
 
-static int test_umount(char *str, int len)
+static int test_umount_dev(char *str, int len)
 {
 	long ret, ret2, ret3;
 
@@ -567,6 +620,36 @@ static int test_umount(char *str, int len)
 	ret3 = lkl_umount_dev(disk_id, 0, 1000);
 
 	snprintf(str, len, "%ld %ld %ld", ret, ret2, ret3);
+
+	if (!ret && !ret2 && !ret3)
+		return TEST_SUCCESS;
+
+	return TEST_FAILURE;
+}
+
+static int test_mount_fs(char *str, int len, char *fs)
+{
+	long ret;
+
+	ret = lkl_mount_fs(fs);
+
+	snprintf(str, len, "%s: %ld", fs, ret);
+
+	if (ret == 0)
+		return TEST_SUCCESS;
+
+	return TEST_FAILURE;
+}
+
+static int test_umount_fs(char *str, int len, char *fs)
+{
+	long ret, ret2, ret3;
+
+	ret = lkl_sys_close(dir_fd);
+	ret2 = lkl_sys_chdir("/");
+	ret3 = lkl_umount_timeout(fs, 0, 1000);
+
+	snprintf(str, len, "%s: %ld %ld %ld", fs, ret, ret2, ret3);
 
 	if (!ret && !ret2 && !ret3)
 		return TEST_SUCCESS;
@@ -590,9 +673,10 @@ static int test_lo_ifup(char *str, int len)
 static int test_mutex(char *str, int len)
 {
 	long ret = TEST_SUCCESS;
-	/* Can't do much to verify that this works, so we'll just let
-	 * Valgrind warn us on CI if we've made bad memory
-	 * accesses. */
+	/*
+	 * Can't do much to verify that this works, so we'll just let Valgrind
+	 * warn us on CI if we've made bad memory accesses.
+	 */
 
 	struct lkl_mutex *mutex = lkl_host_ops.mutex_alloc();
 	lkl_host_ops.mutex_lock(mutex);
@@ -607,9 +691,10 @@ static int test_mutex(char *str, int len)
 static int test_semaphore(char *str, int len)
 {
 	long ret = TEST_SUCCESS;
-	/* Can't do much to verify that this works, so we'll just let
-	 * Valgrind warn us on CI if we've made bad memory
-	 * accesses. */
+	/*
+	 * Can't do much to verify that this works, so we'll just let Valgrind
+	 * warn us on CI if we've made bad memory accesses.
+	 */
 
 	struct lkl_sem *sem = lkl_host_ops.sem_alloc(1);
 	lkl_host_ops.sem_down(sem);
@@ -691,7 +776,36 @@ static int test_syscall_thread(char *str, int len)
 	return TEST_SUCCESS;
 }
 
-void thread_quit_immediately(void *unused)
+#ifndef __MINGW32__
+static void thread_get_pid(void *unused)
+{
+	lkl_sys_getpid();
+}
+
+static int test_many_syscall_threads(char *str, int len)
+{
+	lkl_thread_t tid;
+	int count = 65, ret;
+
+	while (--count > 0) {
+		tid = lkl_host_ops.thread_create(thread_get_pid, NULL);
+		if (!tid) {
+			snprintf(str, len, "failed to create thread");
+			return TEST_FAILURE;
+		}
+
+		ret = lkl_host_ops.thread_join(tid);
+		if (ret) {
+			snprintf(str, len, "failed to join thread");
+			return TEST_FAILURE;
+		}
+	}
+
+	return TEST_SUCCESS;
+}
+#endif
+
+static void thread_quit_immediately(void *unused)
 {
 }
 
@@ -781,14 +895,20 @@ int main(int argc, char **argv)
 
 	lkl_host_ops.print = printk;
 
-	TEST(disk_add);
+	TEST(mutex);
+	TEST(semaphore);
+	TEST(join);
+
+	if (cla.disk_filename)
+		TEST(disk_add);
 #ifndef __MINGW32__
 	if (cla.tap_ifname)
 		TEST(netdev_add);
 #endif /* __MINGW32__ */
-	lkl_start_kernel(&lkl_host_ops, 16 * 1024 * 1024, "");
+	lkl_start_kernel(&lkl_host_ops, 16 * 1024 * 1024, "loglevel=8");
 
 	TEST(getpid);
+	TEST(syscall_latency);
 	TEST(umask);
 	TEST(creat);
 	TEST(close);
@@ -807,17 +927,29 @@ int main(int argc, char **argv)
 #endif  /* __MINGW32__ */
 	TEST(pipe2);
 	TEST(epoll);
-	TEST(mount);
-	TEST(chdir);
+	TEST(mount_fs, "proc");
+	TEST(chdir, "proc");
 	TEST(opendir);
 	TEST(getdents64);
-	TEST(umount);
+	TEST(umount_fs, "proc");
+	if (cla.disk_filename) {
+		TEST(mount_dev);
+		TEST(chdir, mnt_point);
+		TEST(opendir);
+		TEST(getdents64);
+		TEST(umount_dev);
+	}
 	TEST(lo_ifup);
-	TEST(mutex);
-	TEST(semaphore);
 	TEST(gettid);
 	TEST(syscall_thread);
-	TEST(join);
+	/*
+	 * Wine has an issue where the FlsCallback is not called when the thread
+	 * terminates which makes testing the automatic syscall threads cleanup
+	 * impossible under wine.
+	 */
+#ifndef __MINGW32__
+	TEST(many_syscall_threads);
+#endif
 
 	lkl_sys_halt();
 

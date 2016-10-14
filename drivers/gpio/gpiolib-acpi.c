@@ -836,6 +836,7 @@ void acpi_gpiochip_add(struct gpio_chip *chip)
 	}
 
 	acpi_gpiochip_request_regions(acpi_gpio);
+	acpi_walk_dep_device_list(handle);
 }
 
 void acpi_gpiochip_remove(struct gpio_chip *chip)
@@ -977,7 +978,7 @@ bool acpi_can_fallback_to_crs(struct acpi_device *adev, const char *con_id)
 		lookup = kmalloc(sizeof(*lookup), GFP_KERNEL);
 		if (lookup) {
 			lookup->adev = adev;
-			lookup->con_id = con_id;
+			lookup->con_id = kstrdup(con_id, GFP_KERNEL);
 			list_add_tail(&lookup->node, &acpi_crs_lookup_list);
 		}
 	}

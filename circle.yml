@@ -22,6 +22,7 @@ test:
   pre:
     - sudo cp tools/lkl/bin/i686-w64-mingw32-* /usr/bin:
         parallel: true
+    - tools/lkl/scripts/checkpatch.sh
 
   override:
     - cd tools/lkl && make clean:

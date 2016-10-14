@@ -9,6 +9,7 @@
 #include <linux/task_work.h>
 #include <linux/syscalls.h>
 #include <linux/kthread.h>
+#include <linux/platform_device.h>
 #include <asm/host_ops.h>
 #include <asm/syscalls.h>
 #include <asm/syscalls_32.h>
@@ -19,6 +20,8 @@ int lkl__sync_fetch_and_and_4(long unsigned int *ptr, int value);
 struct syscall_thread_data;
 static asmlinkage long sys_create_syscall_thread(struct syscall_thread_data *);
 void do_signal(struct pt_regs *regs);
+static asmlinkage long sys_virtio_mmio_device_add(long base, long size,
+						  unsigned int irq);
 
 typedef long (*syscall_handler_t)(long arg1, ...);
 
@@ -63,7 +66,7 @@ static struct syscall *dequeue_syscall(struct syscall_thread_data *data)
 
 static long run_syscall(struct syscall *s)
 {
-	int ret;
+	long ret;
 
 	if (s->no < 0 || s->no >= __NR_syscalls)
 		ret = -ENOSYS;
@@ -89,8 +92,8 @@ static irqreturn_t syscall_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int __lkl_stop_syscall_thread(struct syscall_thread_data *data,
-				     bool host);
+static void cleanup_syscall_threads(void);
+
 int syscall_thread(void *_data)
 {
 	struct syscall_thread_data *data;
@@ -140,15 +143,8 @@ int syscall_thread(void *_data)
 		lkl_ops->sem_up(data->completion);
 	}
 
-	if (data == &default_syscall_thread_data) {
-		struct syscall_thread_data *i = NULL, *aux;
-
-		list_for_each_entry_safe(i, aux, &syscall_threads, list) {
-			if (i == &default_syscall_thread_data)
-				continue;
-			__lkl_stop_syscall_thread(i, false);
-		}
-	}
+	if (data == &default_syscall_thread_data)
+		cleanup_syscall_threads();
 
 	pr_info("lkl: exiting syscall thread %s\n", current->comm);
 
@@ -340,12 +336,82 @@ sys_create_syscall_thread(struct syscall_thread_data *data)
 	return 0;
 }
 
+
+/*
+ * A synchronization algorithm between cleanup_syscall_threads (which terminates
+ * all remaining syscall threads) and destructors functions (which frees a
+ * syscall thread as soon as the associated host thread terminates) is required
+ * since destructor functions run in host context and is not subject to kernel
+ * scheduling.
+ *
+ * An atomic counter is used to count the number of running destructor functions
+ * and allows the cleanup function to wait for the running destructor functions
+ * to complete.
+ *
+ * The cleanup functions adds MAX_SYSCALL_THREADS to this counter and this
+ * allows the destructor functions to check if the cleanup process has started
+ * and abort execution. This prevents "late" destructors from trying to free the
+ * syscall threads.
+ *
+ * This algorithm assumes that we never have more the MAX_SYSCALL_THREADS
+ * running.
+ */
+#define MAX_SYSCALL_THREADS 1000000
+static unsigned int destrs;
+
+/*
+ * This is called when the host thread terminates if auto_syscall_threads is
+ * enabled. We use it to remove the associated kernel syscall thread since it is
+ * not going to be used anymore.
+ *
+ * Note that this run in host context, not kernel context.
+ *
+ * To avoid races between the destructor and lkl_sys_halt we announce that a
+ * destructor is running and also check to see if lkl_sys_halt is running, in
+ * which case we bail out - the kernel thread is going to be / has been stopped
+ * by lkl_sys_halt.
+ */
+static void syscall_thread_destructor(void *_data)
+{
+	struct syscall_thread_data *data = _data;
+
+	if (!data)
+		return;
+
+	if (__sync_fetch_and_add(&destrs, 1) < MAX_SYSCALL_THREADS)
+		__lkl_stop_syscall_thread(data, true);
+	__sync_fetch_and_sub(&destrs, 1);
+}
+
+static void cleanup_syscall_threads(void)
+{
+	struct syscall_thread_data *i = NULL, *aux;
+
+	/* announce destructors that we are stopping */
+	__sync_fetch_and_add(&destrs, MAX_SYSCALL_THREADS);
+
+	/* wait for any pending destructors to complete */
+	while (__sync_fetch_and_add(&destrs, 0) > MAX_SYSCALL_THREADS)
+		schedule_timeout(1);
+
+	/* no more destructors, we can safely remove the remaining threads */
+	list_for_each_entry_safe(i, aux, &syscall_threads, list) {
+		if (i == &default_syscall_thread_data)
+			continue;
+		__lkl_stop_syscall_thread(i, false);
+	}
+}
+
 int initial_syscall_thread(void *sem)
 {
+	void (*destr)(void *) = NULL;
 	int ret = 0;
 
+	if (auto_syscall_threads)
+		destr = syscall_thread_destructor;
+
 	if (lkl_ops->tls_alloc)
-		ret = lkl_ops->tls_alloc(&syscall_thread_data_key);
+		ret = lkl_ops->tls_alloc(&syscall_thread_data_key, destr);
 	if (ret)
 		return ret;
 
@@ -370,4 +436,51 @@ void free_initial_syscall_thread(void)
 	/* NB: .completion is freed in lkl_sys_halt, because it is
 	 * allocated in the LKL init routine. */
 	lkl_ops->sem_free(default_syscall_thread_data.mutex);
+}
+
+SYSCALL_DEFINE3(virtio_mmio_device_add, long, base, long, size, unsigned int,
+		irq)
+{
+	struct platform_device *pdev;
+	int ret;
+
+	struct resource res[] = {
+		[0] = {
+		       .start = base,
+		       .end = base + size - 1,
+		       .flags = IORESOURCE_MEM,
+		       },
+		[1] = {
+		       .start = irq,
+		       .end = irq,
+		       .flags = IORESOURCE_IRQ,
+		       },
+	};
+
+	pdev = platform_device_alloc("virtio-mmio", PLATFORM_DEVID_AUTO);
+	if (!pdev) {
+		dev_err(&pdev->dev, "%s: Unable to device alloc for virtio-mmio\n", __func__);
+		return -ENOMEM;
+	}
+
+	ret = platform_device_add_resources(pdev, res, ARRAY_SIZE(res));
+	if (ret) {
+		dev_err(&pdev->dev, "%s: Unable to add resources for %s%d\n", __func__, pdev->name, pdev->id);
+		goto exit_device_put;
+	}
+
+	ret = platform_device_add(pdev);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "%s: Unable to add %s%d\n", __func__, pdev->name, pdev->id);
+		goto exit_release_pdev;
+	}
+
+	return pdev->id;
+
+exit_release_pdev:
+	platform_device_del(pdev);
+exit_device_put:
+	platform_device_put(pdev);
+
+	return ret;
 }

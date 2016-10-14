@@ -28,7 +28,7 @@ The supported hosts for now are POSIX and Windows userspace applications.
 Building LKL, the host library and LKL based tools
 ==================================================
 
-    $ make tools/lkl
+    $ make -C tools/lkl
 
 will build LKL as a object file, it will install it in tools/lkl/lib together
 with the headers files in tools/lkl/include then will build the host library,
@@ -56,7 +56,7 @@ Building LKL on FreeBSD
     #Prefer ports binutils and GNU bc(1):
     $ export PATH=/sbin:/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/usr/lib64/ccache
 
-    $ gmake tools/lkl
+    $ gmake -C tools/lkl
 
 Building LKL on Ubuntu
 -----------------------
@@ -66,7 +66,7 @@ Building LKL on Ubuntu
     # Optional, if you would like to be able to run tests
     $ sudo apt-get install btrfs-tools
     
-    $ make tools/lkl
+    $ make -C tools/lkl
     
     # To check that everything works:
     $ cd tools/lkl
@@ -92,7 +92,7 @@ to be recompiled.
 With that pre-requisites fullfilled you can now build LKL for Win32 with the
 following command:
 
-    $ make CROSS_COMPILE=i686-w64-mingw32- tools/lkl
+    $ make CROSS_COMPILE=i686-w64-mingw32- -C tools/lkl
 
     
     
@@ -119,14 +119,14 @@ be built on LLP64.
 Msys2 will install a gcc tool chain as part of the base-devel bundle. Binutils (2.26) is already 
 patched for NT weak externals. Using the msys2 shell, cd to the lkl sources and run:
 
-    $ make tools/lkl
+    $ make -C tools/lkl
 
 ### For MinGW:
 Install mingw-w64-i686-toolchain via pacman, mingw-w64-i686-binutils (2.26) is already patched
 for NT weak externals. Start a MinGW Win32 shell (64-bit will not work, see above)
 and run:
 
-    $ make tools/lkl
+    $ make -C tools/lkl
 
 
 LKL hijack library

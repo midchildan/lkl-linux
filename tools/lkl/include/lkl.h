@@ -53,6 +53,15 @@ static inline long long lkl_sys_lseek(unsigned int fd, __lkl__kernel_loff_t off,
 }
 #endif
 
+static inline void *lkl_sys_mmap(void *addr, size_t length, int prot, int flags,
+				 int fd, off_t offset)
+{
+	return (void *)lkl_sys_mmap_pgoff((long)addr, length, prot, flags, fd,
+					  offset >> 12);
+}
+
+#define lkl_sys_mmap2 lkl_sys_mmap_pgoff
+
 /**
  * lkl_strerror - returns a string describing the given error code
  *
@@ -87,8 +96,6 @@ struct lkl_disk {
 /**
  * lkl_disk_add - add a new disk
  *
- * Must be called before calling lkl_start_kernel.
- *
  * @disk - the host disk handle
  * @returns a disk id (0 is valid) or a strictly negative value in case of error
  */
@@ -102,7 +109,18 @@ int lkl_disk_add(struct lkl_disk *disk);
  *
  * @disk - the host disk handle
  */
-void lkl_disk_remove(struct lkl_disk disk);
+int lkl_disk_remove(struct lkl_disk disk);
+
+/**
+ * lkl_get_virtio_blkdev - get device id of a disk
+ *
+ * This function returns the device id for the given disk.
+ *
+ * @disk_id - the disk id identifying the disk
+ * @pdevid - pointer to memory where dev id will be returned
+ * @returns - 0 on success, a negative value on error
+ */
+int lkl_get_virtio_blkdev(int disk_id, uint32_t *pdevid);
 
 /**
  * lkl_mount_dev - mount a disk
@@ -113,14 +131,14 @@ void lkl_disk_remove(struct lkl_disk disk);
  * @disk_id - the disk id identifying the disk to be mounted
  * @fs_type - filesystem type
  * @flags - mount flags
- * @data - additional filesystem specific mount data
+ * @opts - additional filesystem specific mount options
  * @mnt_str - a string that will be filled by this function with the path where
  * the filesystem has been mounted
  * @mnt_str_len - size of mnt_str
  * @returns - 0 on success, a negative value on error
  */
 long lkl_mount_dev(unsigned int disk_id, const char *fs_type, int flags,
-		   void *data, char *mnt_str, unsigned int mnt_str_len);
+		   const char *opts, char *mnt_str, unsigned int mnt_str_len);
 
 /**
  * lkl_umount_dev - umount a disk
@@ -137,6 +155,17 @@ long lkl_mount_dev(unsigned int disk_id, const char *fs_type, int flags,
 long lkl_umount_dev(unsigned int disk_id, int flags, long timeout_ms);
 
 /**
+ * lkl_umount_timeout - umount filesystem with timeout
+ *
+ * @path - the path to unmount
+ * @flags - umount flags
+ * @timeout_ms - timeout to wait for the kernel to flush closed files so that
+ * umount can succeed
+ * @returns - 0 on success, a negative value on error
+ */
+long lkl_umount_timeout(char *path, int flags, long timeout_ms);
+
+/**
  * lkl_opendir - open a directory
  *
  * @path - directory path
@@ -144,6 +173,22 @@ long lkl_umount_dev(unsigned int disk_id, int flags, long timeout_ms);
  * @returns - a handle to be used when calling lkl_readdir
  */
 struct lkl_dir *lkl_opendir(const char *path, int *err);
+
+/**
+ * lkl_fdopendir - open a directory
+ *
+ * @fd - file descriptor
+ * @err - pointer to store the error in case of failure
+ * @returns - a handle to be used when calling lkl_readdir
+ */
+struct lkl_dir *lkl_fdopendir(int fd, int *err);
+
+/**
+ * lkl_rewinddir - reset directory stream
+ *
+ * @dir - the directory handler as returned by lkl_opendir
+ */
+void lkl_rewinddir(struct lkl_dir *dir);
 
 /**
  * lkl_closedir - close the directory
@@ -224,6 +269,7 @@ int lkl_set_ipv4_gateway(unsigned int addr);
 
 /**
  * lkl_if_set_ipv6 - set IPv6 address on interface
+ * must be called after interface is up.
  *
  * @ifindex - the ifindex of the interface
  * @addr - 16-byte IPv6 address (i.e., struct in6_addr)
@@ -269,15 +315,21 @@ struct lkl_netdev_args {
 int lkl_netdev_add(struct lkl_netdev *nd, struct lkl_netdev_args* args);
 
 /**
-* lkl_netdevs_remove - destroy all network devices
+* lkl_netdev_remove - remove a previously added network device
 *
-* Attempts to release all resources held by network devices created
+* Attempts to release all resources held by a network device created
 * via lkl_netdev_add.
 *
-* @returns 0 if all devices are successfully removed, -1 if at least
-* one fails.
+* @id - the network device id, as return by @lkl_netdev_add
 */
-int lkl_netdevs_remove(void);
+void lkl_netdev_remove(int id);
+
+/**
+ * lkl_netdev_free - frees a network device
+ *
+ * @nd - the network device to free
+ */
+void lkl_netdev_free(struct lkl_netdev *nd);
 
 /**
  * lkl_netdev_get_ifindex - retrieve the interface index for a given network
@@ -368,6 +420,13 @@ void lkl_register_dbg_handler();
  * @mac - mac address of the entry
  */
 int lkl_add_neighbor(int ifindex, int af, void* addr, void* mac);
+
+/**
+ * lkl_mount_fs - mount a file system type like proc, sys
+ * @fstype - file system type. e.g. proc, sys
+ * @returns - 0 on success. 1 if it's already mounted. negative on failure.
+ */
+int lkl_mount_fs(char *fstype);
 
 #ifdef __cplusplus
 }

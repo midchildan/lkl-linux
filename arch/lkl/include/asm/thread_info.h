@@ -6,23 +6,20 @@
 #ifndef __ASSEMBLY__
 #include <asm/types.h>
 #include <asm/processor.h>
+#include <asm/host_ops.h>
 
 typedef struct {
 	unsigned long seg;
 } mm_segment_t;
-
-struct thread_exit_info {
-	bool dead;
-	void *sched_sem;
-};
 
 struct thread_info {
 	struct task_struct *task;
 	unsigned long flags;
 	int preempt_count;
 	mm_segment_t addr_limit;
-	void *sched_sem;
-	struct thread_exit_info *exit_info;
+	struct lkl_sem *sched_sem;
+	bool dead;
+	lkl_thread_t tid;
 	struct task_struct *prev_sched;
 	unsigned long stackend;
 	void *rump_client;	/* for syscall proxy */
@@ -47,8 +44,8 @@ static inline struct thread_info *current_thread_info(void)
 }
 
 /* thread information allocation */
-struct thread_info *alloc_thread_info_node(struct task_struct *, int node);
-void free_thread_info(struct thread_info *);
+unsigned long *alloc_thread_stack_node(struct task_struct *, int node);
+void free_thread_stack(unsigned long *);
 
 int threads_init(void);
 void threads_cleanup(void);

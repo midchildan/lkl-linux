@@ -922,18 +922,19 @@ out:
  * to it.  And as a side-effect, free up its swap: because the old content
  * on disk will never be read, and seeking back there to write new content
  * later would only waste time away from clustering.
+ *
+ * NOTE: total_mapcount should not be relied upon by the caller if
+ * reuse_swap_page() returns false, but it may be always overwritten
+ * (see the other implementation for CONFIG_SWAP=n).
  */
-int reuse_swap_page(struct page *page)
+bool reuse_swap_page(struct page *page, int *total_mapcount)
 {
 	int count;
 
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 	if (unlikely(PageKsm(page)))
-		return 0;
-	/* The page is part of THP and cannot be reused */
-	if (PageTransCompound(page))
-		return 0;
-	count = page_mapcount(page);
+		return false;
+	count = page_trans_huge_mapcount(page, total_mapcount);
 	if (count <= 1 && PageSwapCache(page)) {
 		count += page_swapcount(page);
 		if (count == 1 && !PageWriteback(page)) {
@@ -2492,7 +2493,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		goto bad_swap;
 	}
 	/* frontswap enabled? set up bit-per-page map for frontswap */
-	if (frontswap_enabled)
+	if (IS_ENABLED(CONFIG_FRONTSWAP))
 		frontswap_map = vzalloc(BITS_TO_LONGS(maxpages) * sizeof(long));
 
 	if (p->bdev &&(swap_flags & SWAP_FLAG_DISCARD) && swap_discardable(p)) {
@@ -2723,7 +2724,6 @@ int swapcache_prepare(swp_entry_t entry)
 struct swap_info_struct *page_swap_info(struct page *page)
 {
 	swp_entry_t swap = { .val = page_private(page) };
-	BUG_ON(!PageSwapCache(page));
 	return swap_info[swp_type(swap)];
 }
 

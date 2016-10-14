@@ -55,6 +55,7 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd e
   endif
   export CONFIG_AUTO_LKL_POSIX_HOST=y
   export CONFIG_AUTO_LKL_VIRTIO=y
+  CFLAGS += -DCONFIG_AUTO_LKL_POSIX_HOST
 
   # Intel DPDK configuration
   ifeq ($(dpdk),yes)
@@ -78,6 +79,7 @@ else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   EXESUF   := .exe
   SOSUF    := .dll
   export CONFIG_AUTO_LKL_NT_HOST=y
+  CFLAGS += -DCONFIG_AUTO_LKL_NT_HOST
 else
   $(error Unrecognized platform: $(OUTPUT_FORMAT))
 endif

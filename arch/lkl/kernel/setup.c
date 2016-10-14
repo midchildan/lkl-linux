@@ -1,5 +1,7 @@
+#include <linux/binfmts.h>
 #include <linux/init.h>
 #include <linux/init_task.h>
+#include <linux/personality.h>
 #include <linux/reboot.h>
 #include <linux/tick.h>
 #include <linux/fs.h>
@@ -16,6 +18,7 @@ static void *idle_sem;
 static void *init_sem;
 static void *halt_sem;
 static bool halt;
+static int is_running;
 void (*pm_power_off)(void) = NULL;
 static unsigned long mem_size;
 
@@ -30,15 +33,6 @@ void __init setup_arch(char **cl)
 	*cl = cmd_line;
 	panic_blink = lkl_panic_blink;
 	bootmem_init(mem_size);
-}
-
-int run_init_process(const char *init_filename)
-{
-	initial_syscall_thread(init_sem);
-
-	kernel_halt();
-
-	return 0;
 }
 
 static void __init lkl_run_kernel(void *arg)
@@ -91,6 +85,7 @@ int __init lkl_start_kernel(struct lkl_host_operations *ops,
 
 	lkl_ops->sem_down(init_sem);
 
+	is_running = 1;
 	return 0;
 
 out_free_idle_sem:
@@ -100,6 +95,11 @@ out_free_init_sem:
 	lkl_ops->sem_free(init_sem);
 
 	return ret;
+}
+
+int lkl_is_running(void)
+{
+	return is_running;
 }
 
 void machine_halt(void)
@@ -116,8 +116,6 @@ void machine_restart(char *unused)
 {
 	machine_halt();
 }
-
-extern int lkl_netdevs_remove(void);
 
 long lkl_sys_halt(void)
 {
@@ -141,10 +139,8 @@ long lkl_sys_halt(void)
 	lkl_ops->sem_free(init_sem);
 
 	free_initial_syscall_thread();
-	if (lkl_netdevs_remove() == 0)
-		/* We know that there is nothing else touching our
-		 * memory. */
-		free_mem();
+
+	free_mem();
 
 	return 0;
 }
@@ -157,6 +153,7 @@ void arch_cpu_idle(void)
 		/* Shutdown the clockevents source. */
 		tick_suspend_local();
 
+		is_running = false;
 		lkl_ops->sem_up(halt_sem);
 		lkl_ops->thread_exit();
 	}
@@ -172,14 +169,47 @@ void wakeup_cpu(void)
                 lkl_ops->sem_up(idle_sem);
 }
 
+static int lkl_run_init(struct linux_binprm *bprm);
+
+static struct linux_binfmt lkl_run_init_binfmt = {
+	.module		= THIS_MODULE,
+	.load_binary	= lkl_run_init,
+};
+
+static int lkl_run_init(struct linux_binprm *bprm)
+{
+	int ret;
+
+	if (strcmp("/init", bprm->filename) != 0)
+		return -EINVAL;
+
+	ret = flush_old_exec(bprm);
+	if (ret)
+		return ret;
+	set_personality(PER_LINUX);
+	setup_new_exec(bprm);
+	install_exec_creds(bprm);
+
+	set_binfmt(&lkl_run_init_binfmt);
+
+	initial_syscall_thread(init_sem);
+
+	kernel_halt();
+
+	return 0;
+}
+
+
 /* skip mounting the "real" rootfs. ramfs is good enough. */
 static int __init fs_setup(void)
 {
 	int fd;
 
-	fd = sys_open("/init", O_CREAT, 0600);
+	fd = sys_open("/init", O_CREAT, 0700);
 	WARN_ON(fd < 0);
 	sys_close(fd);
+
+	register_binfmt(&lkl_run_init_binfmt);
 
 	return 0;
 }

@@ -1713,6 +1713,7 @@ static const struct snd_soc_dapm_route wm5102_dapm_routes[] = {
 
 	{ "MICSUPP", NULL, "SYSCLK" },
 
+	{ "DRC1 Signal Activity", NULL, "SYSCLK" },
 	{ "DRC1 Signal Activity", NULL, "DRC1L" },
 	{ "DRC1 Signal Activity", NULL, "DRC1R" },
 };
@@ -1872,7 +1873,7 @@ static struct snd_soc_dai_driver wm5102_dai[] = {
 		.capture = {
 			.stream_name = "Audio Trace CPU",
 			.channels_min = 1,
-			.channels_max = 6,
+			.channels_max = 4,
 			.rates = WM5102_RATES,
 			.formats = WM5102_FORMATS,
 		},
@@ -1955,10 +1956,15 @@ err_adsp2_codec_probe:
 static int wm5102_codec_remove(struct snd_soc_codec *codec)
 {
 	struct wm5102_priv *priv = snd_soc_codec_get_drvdata(codec);
+	struct arizona *arizona = priv->core.arizona;
 
 	wm_adsp2_codec_remove(&priv->core.adsp[0], codec);
 
 	priv->core.arizona->dapm = NULL;
+
+	arizona_free_irq(arizona, ARIZONA_IRQ_DSP_IRQ1, priv);
+
+	arizona_free_spk(codec);
 
 	return 0;
 }
@@ -2093,9 +2099,13 @@ static int wm5102_probe(struct platform_device *pdev)
 
 static int wm5102_remove(struct platform_device *pdev)
 {
+	struct wm5102_priv *wm5102 = platform_get_drvdata(pdev);
+
 	snd_soc_unregister_platform(&pdev->dev);
 	snd_soc_unregister_codec(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
+
+	wm_adsp2_remove(&wm5102->core.adsp[0]);
 
 	return 0;
 }

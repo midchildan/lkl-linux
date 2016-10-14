@@ -135,6 +135,18 @@ static int mlx5_modify_nic_vport_context(struct mlx5_core_dev *mdev, void *in,
 	return mlx5_cmd_exec_check_status(mdev, in, inlen, out, sizeof(out));
 }
 
+void mlx5_query_nic_vport_min_inline(struct mlx5_core_dev *mdev,
+				     u8 *min_inline_mode)
+{
+	u32 out[MLX5_ST_SZ_DW(query_nic_vport_context_out)] = {0};
+
+	mlx5_query_nic_vport_context(mdev, 0, out, sizeof(out));
+
+	*min_inline_mode = MLX5_GET(query_nic_vport_context_out, out,
+				    nic_vport_context.min_wqe_inline_mode);
+}
+EXPORT_SYMBOL_GPL(mlx5_query_nic_vport_min_inline);
+
 int mlx5_query_nic_vport_mac_address(struct mlx5_core_dev *mdev,
 				     u16 vport, u8 *addr)
 {
@@ -195,6 +207,46 @@ int mlx5_modify_nic_vport_mac_address(struct mlx5_core_dev *mdev,
 	return err;
 }
 EXPORT_SYMBOL_GPL(mlx5_modify_nic_vport_mac_address);
+
+int mlx5_query_nic_vport_mtu(struct mlx5_core_dev *mdev, u16 *mtu)
+{
+	int outlen = MLX5_ST_SZ_BYTES(query_nic_vport_context_out);
+	u32 *out;
+	int err;
+
+	out = mlx5_vzalloc(outlen);
+	if (!out)
+		return -ENOMEM;
+
+	err = mlx5_query_nic_vport_context(mdev, 0, out, outlen);
+	if (!err)
+		*mtu = MLX5_GET(query_nic_vport_context_out, out,
+				nic_vport_context.mtu);
+
+	kvfree(out);
+	return err;
+}
+EXPORT_SYMBOL_GPL(mlx5_query_nic_vport_mtu);
+
+int mlx5_modify_nic_vport_mtu(struct mlx5_core_dev *mdev, u16 mtu)
+{
+	int inlen = MLX5_ST_SZ_BYTES(modify_nic_vport_context_in);
+	void *in;
+	int err;
+
+	in = mlx5_vzalloc(inlen);
+	if (!in)
+		return -ENOMEM;
+
+	MLX5_SET(modify_nic_vport_context_in, in, field_select.mtu, 1);
+	MLX5_SET(modify_nic_vport_context_in, in, nic_vport_context.mtu, mtu);
+
+	err = mlx5_modify_nic_vport_context(mdev, in, inlen);
+
+	kvfree(in);
+	return err;
+}
+EXPORT_SYMBOL_GPL(mlx5_modify_nic_vport_mtu);
 
 int mlx5_query_nic_vport_mac_list(struct mlx5_core_dev *dev,
 				  u32 vport,
@@ -467,6 +519,41 @@ int mlx5_query_nic_vport_node_guid(struct mlx5_core_dev *mdev, u64 *node_guid)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(mlx5_query_nic_vport_node_guid);
+
+int mlx5_modify_nic_vport_node_guid(struct mlx5_core_dev *mdev,
+				    u32 vport, u64 node_guid)
+{
+	int inlen = MLX5_ST_SZ_BYTES(modify_nic_vport_context_in);
+	void *nic_vport_context;
+	void *in;
+	int err;
+
+	if (!vport)
+		return -EINVAL;
+	if (!MLX5_CAP_GEN(mdev, vport_group_manager))
+		return -EACCES;
+	if (!MLX5_CAP_ESW(mdev, nic_vport_node_guid_modify))
+		return -ENOTSUPP;
+
+	in = mlx5_vzalloc(inlen);
+	if (!in)
+		return -ENOMEM;
+
+	MLX5_SET(modify_nic_vport_context_in, in,
+		 field_select.node_guid, 1);
+	MLX5_SET(modify_nic_vport_context_in, in, vport_number, vport);
+	MLX5_SET(modify_nic_vport_context_in, in, other_vport, !!vport);
+
+	nic_vport_context = MLX5_ADDR_OF(modify_nic_vport_context_in,
+					 in, nic_vport_context);
+	MLX5_SET64(nic_vport_context, nic_vport_context, node_guid, node_guid);
+
+	err = mlx5_modify_nic_vport_context(mdev, in, inlen);
+
+	kvfree(in);
+
+	return err;
+}
 
 int mlx5_query_nic_vport_qkey_viol_cntr(struct mlx5_core_dev *mdev,
 					u16 *qkey_viol_cntr)

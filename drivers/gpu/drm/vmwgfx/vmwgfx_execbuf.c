@@ -3293,19 +3293,19 @@ static const struct vmw_cmd_entry vmw_cmd_entries[SVGA_3D_CMD_MAX] = {
 		    &vmw_cmd_dx_cid_check, true, false, true),
 	VMW_CMD_DEF(SVGA_3D_CMD_DX_DEFINE_QUERY, &vmw_cmd_dx_define_query,
 		    true, false, true),
-	VMW_CMD_DEF(SVGA_3D_CMD_DX_DESTROY_QUERY, &vmw_cmd_ok,
+	VMW_CMD_DEF(SVGA_3D_CMD_DX_DESTROY_QUERY, &vmw_cmd_dx_cid_check,
 		    true, false, true),
 	VMW_CMD_DEF(SVGA_3D_CMD_DX_BIND_QUERY, &vmw_cmd_dx_bind_query,
 		    true, false, true),
 	VMW_CMD_DEF(SVGA_3D_CMD_DX_SET_QUERY_OFFSET,
-		    &vmw_cmd_ok, true, false, true),
-	VMW_CMD_DEF(SVGA_3D_CMD_DX_BEGIN_QUERY, &vmw_cmd_ok,
+		    &vmw_cmd_dx_cid_check, true, false, true),
+	VMW_CMD_DEF(SVGA_3D_CMD_DX_BEGIN_QUERY, &vmw_cmd_dx_cid_check,
 		    true, false, true),
-	VMW_CMD_DEF(SVGA_3D_CMD_DX_END_QUERY, &vmw_cmd_ok,
+	VMW_CMD_DEF(SVGA_3D_CMD_DX_END_QUERY, &vmw_cmd_dx_cid_check,
 		    true, false, true),
 	VMW_CMD_DEF(SVGA_3D_CMD_DX_READBACK_QUERY, &vmw_cmd_invalid,
 		    true, false, true),
-	VMW_CMD_DEF(SVGA_3D_CMD_DX_SET_PREDICATION, &vmw_cmd_invalid,
+	VMW_CMD_DEF(SVGA_3D_CMD_DX_SET_PREDICATION, &vmw_cmd_dx_cid_check,
 		    true, false, true),
 	VMW_CMD_DEF(SVGA_3D_CMD_DX_SET_VIEWPORTS, &vmw_cmd_dx_cid_check,
 		    true, false, true),
@@ -3625,9 +3625,7 @@ static int vmw_resize_cmd_bounce(struct vmw_sw_context *sw_context,
 				   (sw_context->cmd_bounce_size >> 1));
 	}
 
-	if (sw_context->cmd_bounce != NULL)
-		vfree(sw_context->cmd_bounce);
-
+	vfree(sw_context->cmd_bounce);
 	sw_context->cmd_bounce = vmalloc(sw_context->cmd_bounce_size);
 
 	if (sw_context->cmd_bounce == NULL) {

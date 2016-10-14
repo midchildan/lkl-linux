@@ -195,15 +195,15 @@ static void thread_exit(void)
 
 static int thread_join(lkl_thread_t tid)
 {
-	if (WARN_PTHREAD(pthread_join(tid, NULL)))
+	if (WARN_PTHREAD(pthread_join((pthread_t)tid, NULL)))
 		return -1;
 	else
 		return 0;
 }
 
-static int tls_alloc(unsigned int *key)
+static int tls_alloc(unsigned int *key, void (*destructor)(void *))
 {
-	return pthread_key_create((pthread_key_t*)key, NULL);
+	return pthread_key_create((pthread_key_t *)key, destructor);
 }
 
 static int tls_free(unsigned int key)
@@ -223,11 +223,11 @@ static void *tls_get(unsigned int key)
 
 static unsigned long long time_ns(void)
 {
-	struct timeval tv;
+	struct timespec ts;
 
-	gettimeofday(&tv, NULL);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 
-	return tv.tv_sec * 1000000000ULL + tv.tv_usec * 1000ULL;
+	return 1e9*ts.tv_sec + ts.tv_nsec;
 }
 
 static void *timer_alloc(void (*fn)(void *), void *arg)
@@ -276,7 +276,11 @@ static void panic(void)
 
 static long _gettid(void)
 {
+#ifdef	__FreeBSD__
+	return (long)pthread_self();
+#else
 	return syscall(SYS_gettid);
+#endif
 }
 
 struct lkl_host_operations lkl_host_ops = {
@@ -332,8 +336,8 @@ static int do_rw(ssize_t (*fn)(), struct lkl_disk disk, struct lkl_blk_req *req)
 
 	for (i = 0; i < req->count; i++) {
 
-		addr = req->buf[i].addr;
-		len = req->buf[i].len;
+		addr = req->buf[i].iov_base;
+		len = req->buf[i].iov_len;
 
 		do {
 			ret = fn(disk.fd, addr, len, off);

@@ -27,6 +27,8 @@
 #include <rte_ip.h>
 #include <rte_udp.h>
 
+#include "virtio.h"
+
 #include <lkl_host.h>
 
 static char * const ealargs[] = {
@@ -56,15 +58,16 @@ struct lkl_netdev_dpdk {
 	struct rte_mbuf *rms[MAX_PKT_BURST];
 	int npkts;
 	int bufidx;
+	int close;
 };
 
-static int net_tx(struct lkl_netdev *nd, struct lkl_dev_buf *iov, int cnt)
+static int net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 {
 	void *pkt;
 	struct rte_mbuf *rm;
 	struct lkl_netdev_dpdk *nd_dpdk;
-	void *data = iov[0].addr;
-	int len = (int)iov[0].len;
+	void *data = iov[0].iov_base;
+	int len = (int)iov[0].iov_len;
 
 	nd_dpdk = (struct lkl_netdev_dpdk *) nd;
 
@@ -92,12 +95,12 @@ static int net_tx(struct lkl_netdev *nd, struct lkl_dev_buf *iov, int cnt)
  * refactor allows us to read in parallel, the buffer (nd_dpdk->rms) shall
  * be guarded.
  */
-static int net_rx(struct lkl_netdev *nd, struct lkl_dev_buf *iov, int cnt)
+static int net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 {
 	struct lkl_netdev_dpdk *nd_dpdk;
 	int i, nb_rx, read = 0;
-	void *data = iov[0].addr;
-	int len = (int)iov[0].len;
+	void *data = iov[0].iov_base;
+	int len = (int)iov[0].iov_len;
 
 	nd_dpdk = (struct lkl_netdev_dpdk *) nd;
 
@@ -151,28 +154,44 @@ end:
 	return read;
 }
 
-static int net_poll(struct lkl_netdev *nd, int events)
+static int net_poll(struct lkl_netdev *nd)
 {
-	int ret = 0;
+	struct lkl_netdev_dpdk *nd_dpdk =
+		container_of(nd, struct lkl_netdev_dpdk, dev);
 
+	if (nd_dpdk->close)
+		return LKL_DEV_NET_POLL_HUP;
 	/*
 	 * dpdk's interrupt mode has equivalent of epoll_wait(2),
 	 * which we can apply here. but AFAIK the mode is only available
 	 * on limited NIC drivers like ixgbe/igb/e1000 (with dpdk v2.2.0),
 	 * while vmxnet3 is not supported e.g..
 	 */
-	if (events & LKL_DEV_NET_POLL_RX)
-		ret |= LKL_DEV_NET_POLL_RX;
-	if (events & LKL_DEV_NET_POLL_TX)
-		ret |= LKL_DEV_NET_POLL_TX;
+	return LKL_DEV_NET_POLL_RX | LKL_DEV_NET_POLL_TX;
+}
 
-	return ret;
+static void net_poll_hup(struct lkl_netdev *nd)
+{
+	struct lkl_netdev_dpdk *nd_dpdk =
+		container_of(nd, struct lkl_netdev_dpdk, dev);
+
+	nd_dpdk->close = 1;
+}
+
+static void net_free(struct lkl_netdev *nd)
+{
+	struct lkl_netdev_dpdk *nd_dpdk =
+		container_of(nd, struct lkl_netdev_dpdk, dev);
+
+	free(nd_dpdk);
 }
 
 struct lkl_dev_net_ops dpdk_net_ops = {
 	.tx = net_tx,
 	.rx = net_rx,
 	.poll = net_poll,
+	.poll_hup = net_poll_hup,
+	.free = net_free,
 };
 
 

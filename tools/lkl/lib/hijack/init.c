@@ -25,7 +25,6 @@
 #include <lkl_host.h>
 
 #include "xlate.h"
-#include "../virtio_net_linux_fdnet.h"
 
 #define __USE_GNU
 #include <dlfcn.h>
@@ -137,35 +136,6 @@ static int dump_file(char *path)
 	return 0;
 }
 
-/* For simplicity, if we want to mount a filesystem of a particular
- * type, we'll create a directory under / with the name of the type;
- * e.g. we'll have our sysfs as /sysfs */
-static int mount_fs(char *fstype)
-{
-	char dir[MAX_FSTYPE_LEN] = "/";
-	int flags = 0, ret = 0;
-
-	strncat(dir, fstype, MAX_FSTYPE_LEN - 1);
-
-	/* Create with regular umask */
-	ret = lkl_sys_mkdir(dir, 0xff);
-	if (ret) {
-		fprintf(stderr, "mount_fs mkdir %s: %s\n", dir,
-			lkl_strerror(ret));
-		return -1;
-	}
-
-	/* We have no use for nonzero flags right now */
-	ret = lkl_sys_mount(dir, dir, fstype, flags, NULL);
-	if (ret) {
-		fprintf(stderr, "mount_fs mount %s as %s: %s\n",
-			dir, fstype, strerror(ret));
-		return -1;
-	}
-
-	return 0;
-}
-
 static void mount_cmds_exec(char *_cmds, int (*callback)(char*))
 {
 	char *saveptr = NULL, *token;
@@ -173,22 +143,15 @@ static void mount_cmds_exec(char *_cmds, int (*callback)(char*))
 	char *cmds = strdup(_cmds);
 	token = strtok_r(cmds, ",", &saveptr);
 
-	while (token && !ret) {
+	while (token && ret >= 0) {
 		ret = callback(token);
 		token = strtok_r(NULL, ",", &saveptr);
 	}
 
-	if (ret)
+	if (ret < 0)
 		fprintf(stderr, "mount_cmds_exec: failed parsing %s\n", _cmds);
 
 	free(cmds);
-}
-
-void fixup_netdev_linux_fdnet_ops(void)
-{
-	/* It's okay if this is NULL, because then netdev close will
-	 * fall back onto an uncloseable implementation. */
-	lkl_netdev_linux_fdnet_ops.eventfd = dlsym(RTLD_NEXT, "eventfd");
 }
 
 static void PinToCpus(const cpu_set_t* cpus)
@@ -213,12 +176,15 @@ static void PinToFirstCpu(const cpu_set_t* cpus)
 	}
 }
 
-int lkl_debug;
+int lkl_debug, lkl_running;
+
+static int nd_id = -1;
+static struct lkl_netdev *nd;
 
 void __attribute__((constructor(102)))
 hijack_init(void)
 {
-	int ret, i, dev_null, nd_id = -1, nd_ifindex = -1;
+	int ret, i, dev_null, nd_ifindex = -1;
 	/* OBSOLETE: should use IFTYPE and IFPARAMS */
 	char *tap = getenv("LKL_HIJACK_NET_TAP");
 	char *iftype = getenv("LKL_HIJACK_NET_IFTYPE");
@@ -234,7 +200,6 @@ hijack_init(void)
 	char *gateway6 = getenv("LKL_HIJACK_NET_GATEWAY6");
 	char *debug = getenv("LKL_HIJACK_DEBUG");
 	char *mount = getenv("LKL_HIJACK_MOUNT");
-	struct lkl_netdev *nd = NULL;
 	struct lkl_netdev_args nd_args;
 	char *neigh_entries = getenv("LKL_HIJACK_NET_NEIGHBOR");
 	/* single_cpu mode:
@@ -264,6 +229,15 @@ hijack_init(void)
 	if (offload1)
 		offload = strtol(offload1, NULL, 0);
 
+	if (lkl_debug & 0x200) {
+		char c;
+
+		printf("press 'enter' to continue\n");
+		if (scanf("%c", &c) <= 0) {
+			fprintf(stderr, "scanf() fails\n");
+			return;
+		}
+	}
 	if (single_cpu) {
 		single_cpu_mode = atoi(single_cpu);
 		switch (single_cpu_mode) {
@@ -289,9 +263,6 @@ hijack_init(void)
 	 */
 	if (single_cpu_mode == 2)
 		PinToFirstCpu(&ori_cpu);
-
-	/* Must be run before lkl_netdev_tap_create */
-	fixup_netdev_linux_fdnet_ops();
 
 	if (tap) {
 		fprintf(stderr,
@@ -358,6 +329,8 @@ hijack_init(void)
 		return;
 	}
 
+	lkl_running = 1;
+
 	/* restore cpu affinity */
 	if (single_cpu_mode)
 		PinToCpus(&ori_cpu);
@@ -417,13 +390,13 @@ hijack_init(void)
 	}
 
 	if (nd_ifindex >= 0 && ipv6 && netmask6_len) {
-		char addr[16];
+		struct in6_addr addr;
 		unsigned int pflen = atoi(netmask6_len);
 
-		if (inet_pton(AF_INET6, ipv6, addr) != 1) {
+		if (inet_pton(AF_INET6, ipv6, &addr) != 1) {
 			fprintf(stderr, "Invalid ipv6 addr: %s\n", ipv6);
 		}  else {
-			ret = lkl_if_set_ipv6(nd_ifindex, addr, pflen);
+			ret = lkl_if_set_ipv6(nd_ifindex, &addr, pflen);
 			if (ret < 0)
 				fprintf(stderr, "failed to set IPv6address: %s\n",
 					lkl_strerror(ret));
@@ -444,7 +417,7 @@ hijack_init(void)
 	}
 
 	if (mount)
-		mount_cmds_exec(mount, mount_fs);
+		mount_cmds_exec(mount, lkl_mount_fs);
 
 	if (nd_ifindex >=0 && neigh_entries)
 		add_neighbor(nd_ifindex, neigh_entries);
@@ -469,6 +442,11 @@ hijack_fini(void)
 	for (i = 0; i < LKL_FD_OFFSET; i++)
 		lkl_sys_close(i);
 
+	if (nd_id >= 0)
+		lkl_netdev_remove(nd_id);
+
+	if (nd)
+		lkl_netdev_free(nd);
 
 	lkl_sys_halt();
 }
