@@ -262,6 +262,10 @@ int lkl_netdev_add(struct lkl_netdev *nd, struct lkl_netdev_args* args)
 	if (dev->dev.device_features & BIT(LKL_VIRTIO_NET_F_MRG_RXBUF))
 		virtio_set_queue_max_merge_len(&dev->dev, RX_QUEUE_IDX, 65536);
 
+	dev->poll_tid = lkl_host_ops.thread_create(poll_thread, dev);
+	if (dev->poll_tid == 0)
+		goto out_cleanup_dev;
+
 	/* XXX: only for rump: need to use this semantics for franken_poll(2) */
 #ifdef LIBRUMPUSER
 	{
@@ -273,15 +277,9 @@ int lkl_netdev_add(struct lkl_netdev *nd, struct lkl_netdev_args* args)
 
 		struct lkl_netdev_rumpfd *nd_rumpfd =
 			container_of(nd, struct lkl_netdev_rumpfd, dev);
-		franken_recv_thread(nd_rumpfd->fd, (void *)nd->rx_tid);
+		franken_recv_thread(nd_rumpfd->fd, (void *)dev->poll_tid);
 	}
 #endif /* LIBRUMPUSER */
-
-#if 0
-	dev->poll_tid = lkl_host_ops.thread_create(poll_thread, dev);
-	if (dev->poll_tid == 0)
-		goto out_cleanup_dev;
-#endif
 
 	ret = dev_register(dev);
 	if (ret < 0)

@@ -143,7 +143,7 @@ static void rump_mutex_free(struct lkl_mutex *_mutex)
 }
 
 /* XXX: dummy TLS */
-static int rump_tls_alloc(unsigned int *key)
+static int rump_tls_alloc(unsigned int *key, void (*destructor)(void *))
 {
 	return 0;
 }
@@ -180,7 +180,7 @@ static void rump_mem_free(void *mem)
 }
 
 /* thread */
-static lkl_thread_t thread_create(void (*fn)(void *), void *arg)
+static lkl_thread_t rump_thread_create(void (*fn)(void *), void *arg)
 {
 	void *thrid;
 	int ret;
@@ -193,14 +193,19 @@ static lkl_thread_t thread_create(void (*fn)(void *), void *arg)
 	return (lkl_thread_t) thrid;
 }
 
-static void thread_detach(void)
+static void rump_thread_detach(void)
 {
 	/* NOP */
 }
 
-static void thread_exit(void)
+static void rump_thread_exit(void)
 {
 	rumpuser_thread_exit();
+}
+
+static int rump_thread_join(lkl_thread_t tid)
+{
+	rumpuser_thread_join((void *)tid);
 }
 
 /* time/timer */
@@ -349,9 +354,10 @@ static void panic(void)
 extern char lkl_virtio_devs[];
 struct lkl_host_operations lkl_host_ops = {
 	.panic = panic,
-	.thread_create = thread_create,
-	.thread_detach = thread_detach,
-	.thread_exit = thread_exit,
+	.thread_create = rump_thread_create,
+	.thread_detach = rump_thread_detach,
+	.thread_exit = rump_thread_exit,
+	.thread_join = rump_thread_join,
 	.sem_alloc = rump_sem_alloc,
 	.sem_free = rump_sem_free,
 	.sem_up = rump_sem_up,
@@ -545,14 +551,14 @@ struct lkl_netdev_rumpfd {
 };
 
 static int rump_net_tx(struct lkl_netdev *nd,
-		       struct lkl_dev_buf *iov, int cnt)
+		       struct iovec *iov, int cnt)
 {
 	struct lkl_netdev_rumpfd *nd_rumpfd =
 		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	int ret;
 
 	do {
-		ret = writev(nd_rumpfd->fd, (struct iovec *)iov, cnt);
+		ret = writev(nd_rumpfd->fd, iov, cnt);
 	} while (ret == -1 && (errno == EINTR));
 
 	if (ret < 0)
@@ -562,14 +568,14 @@ static int rump_net_tx(struct lkl_netdev *nd,
 }
 
 static int rump_net_rx(struct lkl_netdev *nd,
-		       struct lkl_dev_buf *iov, int cnt)
+		       struct iovec *iov, int cnt)
 {
 	struct lkl_netdev_rumpfd *nd_rumpfd =
 		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	int ret;
 
 	do {
-		ret = readv(nd_rumpfd->fd, (struct iovec *)iov, cnt);
+		ret = readv(nd_rumpfd->fd, iov, cnt);
 	} while (ret == -1 && errno == EINTR);
 
 	if (ret <= 0)
@@ -578,19 +584,16 @@ static int rump_net_rx(struct lkl_netdev *nd,
 	return ret;
 }
 
-static int rump_net_poll(struct lkl_netdev *nd, int events)
+static int rump_net_poll(struct lkl_netdev *nd)
 {
 	struct lkl_netdev_rumpfd *nd_rumpfd =
 		container_of(nd, struct lkl_netdev_rumpfd, dev);
 	struct pollfd pfd = {
 		.fd = nd_rumpfd->fd,
+		.events = POLLIN | POLLPRI | POLLOUT
 	};
 	int ret = 0;
 
-	if (events & LKL_DEV_NET_POLL_RX)
-		pfd.events |= POLLIN;
-	if (events & LKL_DEV_NET_POLL_TX)
-		pfd.events |= POLLOUT;
 
 	while (1) {
 		/* XXX: this should be poll(pfd, 1, -1) but fiber thread
