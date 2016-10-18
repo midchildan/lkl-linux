@@ -186,7 +186,7 @@ static lkl_thread_t rump_thread_create(void (*fn)(void *), void *arg)
 	int ret;
 
 	ret = rumpuser_thread_create((void * (*)(void *))fn, arg,
-				     "lkl_thr", 0, 1, -1, &thrid);
+				     "lkl_thr", 1, 1, -1, &thrid);
 	if (ret)
 		return 0;
 
