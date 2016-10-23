@@ -7,6 +7,7 @@
 #ifdef RUMPRUN
 #define snprintf rumpns_snprintf
 #define memset rumpns_memset
+#define memcmp rumpns_memcmp
 #endif
 
 static inline void set_sockaddr(struct lkl_sockaddr_in *sin, unsigned int addr,
@@ -438,7 +439,7 @@ static int check_error(struct lkl_sockaddr_nl *nladdr, struct lkl_nlmsghdr *n,
 			return 0;
 
 		lkl_printf( "RTNETLINK answers: %s\n",
-			strerror(-err->error));
+			lkl_strerror(-err->error));
 		return -1;
 	}
 	lkl_printf( "Unexpected reply!!!\n");

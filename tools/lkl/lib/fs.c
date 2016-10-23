@@ -7,6 +7,10 @@
 #ifdef RUMPRUN
 #define snprintf rumpns_snprintf
 #define sscanf rumpns_sscanf
+#define strncat rumpns_strncat
+#define strlen rumpns_strlen
+#define strncmp rumpns_strncmp
+#define strncpy rumpns_strncpy
 #endif
 
 #include "virtio.h"
@@ -61,7 +65,7 @@ static char *get_node_with_prefix(const char *path, const char *prefix,
 
 	while ((dirent = lkl_readdir(dir))) {
 		if (startswith(dirent->d_name, prefix)) {
-			result = strdup(dirent->d_name);
+			result = dirent->d_name;
 			break;
 		}
 	}
@@ -114,7 +118,6 @@ int lkl_get_virtio_blkdev(int disk_id, uint32_t *pdevid)
 
 	ret = snprintf(sysfs_path + sysfs_path_len, sizeof(sysfs_path) - sysfs_path_len, "/%s/block",
 		       virtio_name);
-	free(virtio_name);
 	if (ret < 0 || (size_t) ret >= sizeof(sysfs_path) - sysfs_path_len)
 		return -LKL_ENOMEM;
 	sysfs_path_len += ret;
@@ -125,7 +128,6 @@ int lkl_get_virtio_blkdev(int disk_id, uint32_t *pdevid)
 
 	ret = snprintf(sysfs_path + sysfs_path_len, sizeof(sysfs_path) - sysfs_path_len, "/%s/dev",
 		       disk_name);
-	free(disk_name);
 	if (ret < 0 || (size_t) ret >= sizeof(sysfs_path) - sysfs_path_len)
 		return -LKL_ENOMEM;
 	sysfs_path_len += ret;
