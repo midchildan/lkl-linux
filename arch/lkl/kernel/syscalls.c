@@ -15,6 +15,8 @@
 #include <asm/syscalls_32.h>
 
 /* FIXME */
+int lkl__sync_fetch_and_sub_4(int *ptr, int value);
+int lkl__sync_fetch_and_add_4(int *ptr, int value);
 int lkl__sync_fetch_and_and_4(long unsigned int *ptr, int value);
 
 struct syscall_thread_data;
@@ -378,9 +380,15 @@ static void syscall_thread_destructor(void *_data)
 	if (!data)
 		return;
 
+#if defined(__ARMEL__)
+	if (lkl__sync_fetch_and_add_4(&destrs, 1) < MAX_SYSCALL_THREADS)
+		__lkl_stop_syscall_thread(data, true);
+	lkl__sync_fetch_and_sub_4(&destrs, 1);
+#else
 	if (__sync_fetch_and_add(&destrs, 1) < MAX_SYSCALL_THREADS)
 		__lkl_stop_syscall_thread(data, true);
 	__sync_fetch_and_sub(&destrs, 1);
+#endif
 }
 
 static void cleanup_syscall_threads(void)
@@ -388,12 +396,19 @@ static void cleanup_syscall_threads(void)
 	struct syscall_thread_data *i = NULL, *aux;
 
 	/* announce destructors that we are stopping */
+#if defined(__ARMEL__)
+	lkl__sync_fetch_and_add_4(&destrs, MAX_SYSCALL_THREADS);
+
+	/* wait for any pending destructors to complete */
+	while (lkl__sync_fetch_and_add_4(&destrs, 0) > MAX_SYSCALL_THREADS)
+		schedule_timeout(1);
+#else
 	__sync_fetch_and_add(&destrs, MAX_SYSCALL_THREADS);
 
 	/* wait for any pending destructors to complete */
 	while (__sync_fetch_and_add(&destrs, 0) > MAX_SYSCALL_THREADS)
 		schedule_timeout(1);
-
+#endif
 	/* no more destructors, we can safely remove the remaining threads */
 	list_for_each_entry_safe(i, aux, &syscall_threads, list) {
 		if (i == &default_syscall_thread_data)

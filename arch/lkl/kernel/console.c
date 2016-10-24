@@ -68,8 +68,8 @@ static ssize_t file_read(struct file *file, char __user *buf, size_t size,
 			 loff_t *ppos)
 {
 	int err = 0;
-/* need to use iovread in host_ops (not directly from rump hypercall) */
-#ifdef FIXME
+#ifdef TO_BE_IMPLEMENTED
+	/* need to use iovread in host_ops (not directly from rump hypercall) */
 	struct rumpuser_iovec iov;
 	ssize_t ret;
 

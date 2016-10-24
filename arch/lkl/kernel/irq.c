@@ -9,6 +9,9 @@
 #include <asm/irqflags.h>
 #include <asm/host_ops.h>
 
+int lkl__sync_store(unsigned long int *ptr, int value);
+int lkl__sync_fetch_and_and_4(unsigned long int *ptr, int value);
+
 /*
  * To avoid much overhead we use an indirect approach: the irqs are marked using
  * a bitmap (array of longs) and a summary of the modified bits is kept in a
@@ -26,14 +29,14 @@ static inline unsigned long test_and_clear_irq_index_status(void)
 {
 	if (!irq_index_status)
 		return 0;
-	return __sync_fetch_and_and(&irq_index_status, 0);
+	return lkl__sync_fetch_and_and_4(&irq_index_status, 0);
 }
 
 static inline unsigned long test_and_clear_irq_status(int index)
 {
 	if (!&irq_status[index])
 		return 0;
-	return __sync_fetch_and_and(&irq_status[index], 0);
+	return lkl__sync_fetch_and_and_4(&irq_status[index], 0);
 }
 
 static inline void set_irq_status(int irq)
@@ -41,8 +44,8 @@ static inline void set_irq_status(int irq)
 	int index = irq / IRQ_STATUS_BITS;
 	int bit = irq % IRQ_STATUS_BITS;
 
-	__sync_fetch_and_or(&irq_status[index], BIT(bit));
-	__sync_fetch_and_or(&irq_index_status, BIT(index));
+	lkl__sync_store(&irq_status[index], BIT(bit));
+	lkl__sync_store(&irq_index_status, BIT(index));
 }
 
 #define IRQ_BIT(x)			BIT(x-1)
@@ -88,11 +91,15 @@ int lkl__sync_store(unsigned long int *ptr, int value)
 	lkl_ops->sem_up(irqs_lock);
 	return 0;
 }
-#define TEST_AND_CLEAR_IRQ_STATUS(x)	lkl__sync_fetch_and_and_4(&irq_status, 0)
-#define SET_IRQ_STATUS(x)		lkl__sync_store(&irq_status, BIT(x - 1))
 #else
-#define TEST_AND_CLEAR_IRQ_STATUS(x)   __sync_fetch_and_and(&irq_status, 0)
-#define SET_IRQ_STATUS(x)              __sync_fetch_and_or(&irq_status, BIT(x - 1))
+int lkl__sync_store(unsigned long int *ptr, int value)
+{
+	return __sync_fetch_and_or(ptr, value);
+}
+int lkl__sync_fetch_and_and_4(unsigned long int *ptr, int value)
+{
+	return __sync_fetch_and_and(ptr, value);
+}
 #endif
 
 static struct irq_info {

@@ -140,7 +140,7 @@ for h in headers:
     except:
         pass
     print("  INSTALL\t%s" % (out_dir + "/" + os.path.basename(h)))
-    os.system(srctree + "/scripts/headers_install.sh %s %s %s" % (out_dir, copyfromdir,
+    os.system(srctree+"/scripts/headers_install.sh %s %s %s" % (out_dir, copyfromdir,
                                                        os.path.basename(h)))
     new_headers.add(out_dir + "/" + os.path.basename(h))
 
