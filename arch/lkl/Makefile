@@ -33,14 +33,12 @@ endif
 KBUILD_CFLAGS += -Iarch/lkl/kernel
 
 LDFLAGS_vmlinux += -r
-LKL_ENTRY_POINTS := lkl_start_kernel lkl_sys_halt lkl_syscall lkl_trigger_irq \
-	lkl_get_free_irq lkl_put_irq lkl_create_syscall_thread \
-	lkl_stop_syscall_thread lkl_is_running
 
 core-y += arch/lkl/kernel/
 core-y += arch/lkl/drivers/
 core-y += arch/lkl/mm/
 
+ifeq ($(buildrump),yes)
 # objcopy trick is taken from rumpkernel
 GCCSYMBOLS=__umoddi3|__udivdi3|__aeabi_idiv|__aeabi_idivmod|__aeabi_llsl|__aeabi_llsr|__aeabi_uidiv|__aeabi_uidivmod|__aeabi_uldivmod
 GCCATOMIC=__sync_synchronize|__sync_fetch_and_sub_4|__sync_fetch_and_add_4|__sync_fetch_and_and_4|__sync_fetch_and_or_4
@@ -57,6 +55,15 @@ define make_ns_symbols
 	 --redefine-syms $2.renametab $1 $2; \
 	rm -f $2.renametab
 endef
+else
+LKL_ENTRY_POINTS := lkl_start_kernel lkl_sys_halt lkl_syscall lkl_trigger_irq \
+	lkl_get_free_irq lkl_put_irq lkl_create_syscall_thread \
+	lkl_stop_syscall_thread lkl_is_running
+define make_ns_symbols
+	$(OBJCOPY) -R .eh_frame -R .syscall_defs $(foreach sym,$(LKL_ENTRY_POINTS),\
+	-G$(prefix)$(sym)) vmlinux lkl.o
+endef
+endif
 
 all: lkl.o
 

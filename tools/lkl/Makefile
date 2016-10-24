@@ -120,8 +120,10 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
 endif
 
 # if there is no rumpuser.h, then skip build
-ifeq (,$(wildcard $(RUMP_INCLUDE)))
+ifeq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
 else
+  buildrump=yes
+  KOPT+="buildrump="$(buildrump)
   export CONFIG_AUTO_LKL_RUMP_HOST=y
   export CONFIG_AUTO_LKL_POSIX_HOST=n
   export CONFIG_AUTO_LKL_VIRTIO=y
