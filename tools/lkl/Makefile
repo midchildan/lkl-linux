@@ -55,6 +55,7 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd e
   endif
   export CONFIG_AUTO_LKL_POSIX_HOST=y
   export CONFIG_AUTO_LKL_VIRTIO=y
+  export CONFIG_AUTO_LKL_VIRTIO_NET=y
   CFLAGS += -DCONFIG_AUTO_LKL_POSIX_HOST
 
   # Intel DPDK configuration
@@ -79,6 +80,8 @@ else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   EXESUF   := .exe
   SOSUF    := .dll
   export CONFIG_AUTO_LKL_NT_HOST=y
+  export CONFIG_AUTO_LKL_VIRTIO=y
+  export CONFIG_AUTO_LKL_VIRTIO_NET=n
   CFLAGS += -DCONFIG_AUTO_LKL_NT_HOST
 else
   $(error Unrecognized platform: $(OUTPUT_FORMAT))
@@ -127,6 +130,7 @@ else
   export CONFIG_AUTO_LKL_RUMP_HOST=y
   export CONFIG_AUTO_LKL_POSIX_HOST=n
   export CONFIG_AUTO_LKL_VIRTIO=y
+  export CONFIG_AUTO_LKL_VIRTIO_NET=y
   CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
 #  LDFLAGS += -L$(RUMP_LIB) -Wl,-rpath,$(RUMP_LIB) -lrumpuser
 
@@ -134,6 +138,7 @@ else
 ifeq ($(rumprun),yes)
   CFLAGS += -DRUMPRUN
   export CONFIG_AUTO_LKL_VIRTIO=n
+  export CONFIG_AUTO_LKL_VIRTIO_NET=n
 endif
 endif
 
