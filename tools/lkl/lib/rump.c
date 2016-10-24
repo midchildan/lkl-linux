@@ -13,11 +13,11 @@
 #include <lkl.h>
 #include <lkl_host.h>
 
-static struct lwp *rump_libos_lwproc_curlwp(void);
-static int rump_libos_lwproc_newlwp(pid_t pid);
-static void rump_libos_lwproc_switch(struct lwp *newlwp);
-static void rump_libos_lwproc_release(void);
-static int rump_libos_lwproc_rfork(void *priv, int flags, const char *comm);
+static struct lwp *rump_lkl_lwproc_curlwp(void);
+static int rump_lkl_lwproc_newlwp(pid_t pid);
+static void rump_lkl_lwproc_switch(struct lwp *newlwp);
+static void rump_lkl_lwproc_release(void);
+static int rump_lkl_lwproc_rfork(void *priv, int flags, const char *comm);
 
 void
 rump_schedule(void)
@@ -48,7 +48,7 @@ rump_pub_lwproc_rfork(int arg1)
 	int rv = 0;
 
 	rump_schedule();
-//	rv = rump_libos_lwproc_rfork(arg1);
+//	rv = rump_lkl_lwproc_rfork(arg1);
 	rump_unschedule();
 
 	return rv;
@@ -60,7 +60,7 @@ rump_pub_lwproc_newlwp(pid_t arg1)
 	int rv;
 
 	rump_schedule();
-	rv = rump_libos_lwproc_newlwp(arg1);
+	rv = rump_lkl_lwproc_newlwp(arg1);
 	rump_unschedule();
 
 	return rv;
@@ -71,7 +71,7 @@ rump_pub_lwproc_switch(struct lwp *arg1)
 {
 
 	rump_schedule();
-	rump_libos_lwproc_switch(arg1);
+	rump_lkl_lwproc_switch(arg1);
 	rump_unschedule();
 }
 
@@ -80,7 +80,7 @@ rump_pub_lwproc_releaselwp(void)
 {
 
 	rump_schedule();
-	rump_libos_lwproc_release();
+	rump_lkl_lwproc_release();
 	rump_unschedule();
 }
 
@@ -90,7 +90,7 @@ rump_pub_lwproc_curlwp(void)
 	struct lwp * rv;
 
 	rump_schedule();
-	rv = rump_libos_lwproc_curlwp();
+	rv = rump_lkl_lwproc_curlwp();
 	rump_unschedule();
 
 	return rv;
@@ -112,13 +112,13 @@ rump_syscall(int num, void *data, size_t dlen, long *retval)
 
 
 static int
-rump_libos_hyp_syscall(int num, void *arg, long *retval)
+rump_lkl_hyp_syscall(int num, void *arg, long *retval)
 {
 	return rump_syscall(num, arg, 0, retval);
 }
 
 static int
-rump_libos_lwproc_rfork(void *priv, int flags, const char *comm)
+rump_lkl_lwproc_rfork(void *priv, int flags, const char *comm)
 {
 #ifdef FIXME
 	/* FIXME: needs new task_struct instead of get_current() */
@@ -134,7 +134,7 @@ rump_libos_lwproc_rfork(void *priv, int flags, const char *comm)
 }
 
 static void
-rump_libos_lwproc_release(void)
+rump_lkl_lwproc_release(void)
 {
 	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
 
@@ -142,7 +142,7 @@ rump_libos_lwproc_release(void)
 }
 
 static void
-rump_libos_lwproc_switch(struct lwp *newlwp)
+rump_lkl_lwproc_switch(struct lwp *newlwp)
 {
 	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
 
@@ -152,7 +152,7 @@ rump_libos_lwproc_switch(struct lwp *newlwp)
 
 /* find rump_task created by rfork */
 static int
-rump_libos_lwproc_newlwp(pid_t pid)
+rump_lkl_lwproc_newlwp(pid_t pid)
 {
 #ifdef FIXME
 	/* find rump_task */
@@ -181,13 +181,13 @@ rump_libos_lwproc_newlwp(pid_t pid)
 }
 
 static struct lwp *
-rump_libos_lwproc_curlwp(void)
+rump_lkl_lwproc_curlwp(void)
 {
 	return rumpuser_curlwp();
 }
 
 static void
-rump_libos_hyp_lwpexit(void)
+rump_lkl_hyp_lwpexit(void)
 {
 	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
 
@@ -198,7 +198,7 @@ rump_libos_hyp_lwpexit(void)
 }
 
 static pid_t
-rump_libos_hyp_getpid(void)
+rump_lkl_hyp_getpid(void)
 {
 #ifdef FIXME
 	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
@@ -208,27 +208,27 @@ rump_libos_hyp_getpid(void)
 	return -1;
 }
 
-static void rump_libos_user_unschedule(int nlocks, int *countp,
+static void rump_lkl_user_unschedule(int nlocks, int *countp,
 				       void *interlock) {}
-static void rump_libos_user_schedule(int nlocks, void *interlock) {}
-static void rump_libos_hyp_execnotify(const char *comm) {}
+static void rump_lkl_user_schedule(int nlocks, void *interlock) {}
+static void rump_lkl_hyp_execnotify(const char *comm) {}
 
 const struct rumpuser_hyperup hyp = {
 	.hyp_schedule		= rump_schedule,
 	.hyp_unschedule		= rump_unschedule,
-	.hyp_backend_unschedule	= rump_libos_user_unschedule,
-	.hyp_backend_schedule	= rump_libos_user_schedule,
+	.hyp_backend_unschedule	= rump_lkl_user_unschedule,
+	.hyp_backend_schedule	= rump_lkl_user_schedule,
 
-	.hyp_lwproc_switch	= rump_libos_lwproc_switch,
-	.hyp_lwproc_release	= rump_libos_lwproc_release,
-	.hyp_lwproc_newlwp	= rump_libos_lwproc_newlwp,
-	.hyp_lwproc_curlwp	= rump_libos_lwproc_curlwp,
+	.hyp_lwproc_switch	= rump_lkl_lwproc_switch,
+	.hyp_lwproc_release	= rump_lkl_lwproc_release,
+	.hyp_lwproc_newlwp	= rump_lkl_lwproc_newlwp,
+	.hyp_lwproc_curlwp	= rump_lkl_lwproc_curlwp,
 
-	.hyp_getpid		= rump_libos_hyp_getpid,
-	.hyp_syscall		= rump_libos_hyp_syscall,
-	.hyp_lwproc_rfork	= rump_libos_lwproc_rfork,
-	.hyp_lwpexit		= rump_libos_hyp_lwpexit,
-	.hyp_execnotify		= rump_libos_hyp_execnotify,
+	.hyp_getpid		= rump_lkl_hyp_getpid,
+	.hyp_syscall		= rump_lkl_hyp_syscall,
+	.hyp_lwproc_rfork	= rump_lkl_lwproc_rfork,
+	.hyp_lwpexit		= rump_lkl_hyp_lwpexit,
+	.hyp_execnotify		= rump_lkl_hyp_execnotify,
 };
 
 

@@ -9,9 +9,6 @@
 #include <asm/irqflags.h>
 #include <asm/host_ops.h>
 
-int lkl__sync_store(unsigned long int *ptr, int value);
-int lkl__sync_fetch_and_and_4(unsigned long int *ptr, int value);
-
 /*
  * To avoid much overhead we use an indirect approach: the irqs are marked using
  * a bitmap (array of longs) and a summary of the modified bits is kept in a
@@ -29,14 +26,14 @@ static inline unsigned long test_and_clear_irq_index_status(void)
 {
 	if (!irq_index_status)
 		return 0;
-	return lkl__sync_fetch_and_and_4(&irq_index_status, 0);
+	return lkl__sync_fetch_and_and(&irq_index_status, 0);
 }
 
 static inline unsigned long test_and_clear_irq_status(int index)
 {
 	if (!&irq_status[index])
 		return 0;
-	return lkl__sync_fetch_and_and_4(&irq_status[index], 0);
+	return lkl__sync_fetch_and_and(&irq_status[index], 0);
 }
 
 static inline void set_irq_status(int irq)
@@ -44,63 +41,11 @@ static inline void set_irq_status(int irq)
 	int index = irq / IRQ_STATUS_BITS;
 	int bit = irq % IRQ_STATUS_BITS;
 
-	lkl__sync_store(&irq_status[index], BIT(bit));
-	lkl__sync_store(&irq_index_status, BIT(index));
+	lkl__sync_fetch_and_or(&irq_status[index], BIT(bit));
+	lkl__sync_fetch_and_or(&irq_index_status, BIT(index));
 }
 
 #define IRQ_BIT(x)			BIT(x-1)
-
-#if defined(__ARMEL__)
-static void *irqs_lock;
-
-int lkl__sync_fetch_and_add_4(int *ptr, int value)
-{
-	lkl_ops->sem_down(irqs_lock);
-	int tmp = *ptr;
-	*ptr += value;
-	lkl_ops->sem_up(irqs_lock);
-	return tmp;
-}
-
-int lkl__sync_fetch_and_and_4(unsigned long int *ptr, int value)
-{
-	lkl_ops->sem_down(irqs_lock);
-	int tmp = *ptr;
-	*ptr *= value;
-	lkl_ops->sem_up(irqs_lock);
-	return tmp;
-}
-
-int lkl__sync_fetch_and_sub_4(int *ptr, int value)
-{
-	lkl_ops->sem_down(irqs_lock);
-	int tmp = *ptr;
-	*ptr -= value;
-	lkl_ops->sem_up(irqs_lock);
-	return tmp;
-}
-
-void lkl__sync_synchronize(void)
-{
-}
-
-int lkl__sync_store(unsigned long int *ptr, int value)
-{
-	lkl_ops->sem_down(irqs_lock);
-	*ptr = value;
-	lkl_ops->sem_up(irqs_lock);
-	return 0;
-}
-#else
-int lkl__sync_store(unsigned long int *ptr, int value)
-{
-	return __sync_fetch_and_or(ptr, value);
-}
-int lkl__sync_fetch_and_and_4(unsigned long int *ptr, int value)
-{
-	return __sync_fetch_and_and(ptr, value);
-}
-#endif
 
 static struct irq_info {
 	const char *user;
@@ -202,7 +147,7 @@ void arch_local_irq_restore(unsigned long flags)
 static int lkl_irq_request_resource(struct irq_data *data)
 {
 	if (!lkl_ops->irq_request)
-		return 0;	/* ignore error */
+		return 0;
 
 	return lkl_ops->irq_request(data);
 }
@@ -239,12 +184,9 @@ void init_IRQ(void)
 {
 	int i;
 
-#if defined(__ARMEL__)
-	irqs_lock = lkl_ops->sem_alloc(1);
-#endif
-
 	for (i = 0; i < NR_IRQS; i++)
-		irq_set_chip_and_handler(i, &dummy_lkl_irq_chip, handle_simple_irq);
+		irq_set_chip_and_handler(i, &dummy_lkl_irq_chip,
+					 handle_simple_irq);
 
 	pr_info("lkl: irqs initialized\n");
 }

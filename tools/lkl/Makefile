@@ -132,7 +132,6 @@ else
   export CONFIG_AUTO_LKL_VIRTIO=y
   export CONFIG_AUTO_LKL_VIRTIO_NET=y
   CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
-#  LDFLAGS += -L$(RUMP_LIB) -Wl,-rpath,$(RUMP_LIB) -lrumpuser
 
 # if rumprun=yes, then skip virtio-host build
 ifeq ($(rumprun),yes)
@@ -179,8 +178,10 @@ else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
   all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
 else ifneq (,$(wildcard $(RUMP_INCLUDE)))
   all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  install: headers_install libraries_install
 else
   all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
+  install: headers_install libraries_install programs_install
 endif
 
 clean:
@@ -210,9 +211,6 @@ programs_install: $(ALL_PROGRAMS)
 	$(call QUIET_INSTALL, programs) \
 	    install -d $(DESTDIR)$(PREFIX)/bin ; \
 	    install -m 755 $(ALL_PROGRAMS) $(DESTDIR)$(PREFIX)/bin
-
-install: headers_install libraries_install programs_install
-
 
 FORCE: ;
 .PHONY: all clean $(TEST_TARGETS) FORCE

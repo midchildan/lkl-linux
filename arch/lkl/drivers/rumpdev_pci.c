@@ -187,8 +187,9 @@ static int pci_lib_claim_resource(struct pci_dev *dev, void *data)
 			dev_info(&dev->dev, "claiming resource %s/%d\n",
 				pci_name(dev), i);
 			if (pci_claim_resource(dev, i)) {
-				dev_err(&dev->dev, "Could not claim resource %s/%d! "
-					"Device offline. Try using e820_host=1 in the guest config.\n",
+				dev_err(&dev->dev, "Could not claim resource "
+					"%s/%d! Device offline. Try using "
+					"e820_host=1 in the guest config.\n",
 					pci_name(dev), i);
 			}
 		}
@@ -217,7 +218,7 @@ int rump_pci_irq_request(struct irq_data *data)
 	/* setup IRQ */
 	int_irq = lkl_get_free_irq(name);
 
-	ret = rumpcomp_pci_irq_map(0, 0, 0, intr[intnum++] /* data->irq */, int_irq);
+	ret = rumpcomp_pci_irq_map(0, 0, 0, intr[intnum++], int_irq);
 	rumpcomp_pci_irq_establish(int_irq, rump_trigger_irq, data);
 
 	return 0;
@@ -247,7 +248,8 @@ static int __init rump_pci_init(void)
 		return -1;
 	}
 
-	printk(KERN_INFO "PCI: root bus %02x: using default resources\n", busnum);
+	printk(KERN_INFO "PCI: root bus %02x: using default resources\n",
+	       busnum);
 	bus = pci_scan_bus(busnum, &rump_pci_root_ops, sd);
 	if (!bus) {
 		kfree(sd);

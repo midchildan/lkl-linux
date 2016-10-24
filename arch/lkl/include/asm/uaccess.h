@@ -9,8 +9,6 @@
 #include <asm/thread_info.h>
 
 #ifdef ENABLE_SYSPROXY
-#define __dead
-#define __printflike(x,y)
 #include <rump/rumpuser.h>
 #endif
 
@@ -29,7 +27,6 @@ static inline __must_check long __copy_from_user(void *to,
 		return EFAULT;
 	}
 
-	/* FIXME: how to handle the DCE's case ? */
 	if (!ti->rump_client) {
 		memcpy(to, from, n);
 	} else if (n) {
@@ -56,7 +53,6 @@ static inline __must_check long __copy_to_user(void __user *to,
 		return EFAULT;
 	}
 
-	/* FIXME: how to handle the DCE's case ? */
 	if (!ti->rump_client) {
 		memcpy(to, from, n);
 	}

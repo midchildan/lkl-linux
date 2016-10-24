@@ -34,10 +34,6 @@ KBUILD_CFLAGS += -Iarch/lkl/kernel
 
 LDFLAGS_vmlinux += -r
 
-core-y += arch/lkl/kernel/
-core-y += arch/lkl/drivers/
-core-y += arch/lkl/mm/
-
 ifeq ($(buildrump),yes)
 # objcopy trick is taken from rumpkernel
 GCCSYMBOLS=__umoddi3|__udivdi3|__aeabi_idiv|__aeabi_idivmod|__aeabi_llsl|__aeabi_llsr|__aeabi_uidiv|__aeabi_uidivmod|__aeabi_uldivmod
@@ -64,6 +60,10 @@ define make_ns_symbols
 	-G$(prefix)$(sym)) vmlinux lkl.o
 endef
 endif
+
+core-y += arch/lkl/kernel/
+core-y += arch/lkl/mm/
+core-y += arch/lkl/drivers/
 
 all: lkl.o
 

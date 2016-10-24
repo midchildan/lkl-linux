@@ -3,7 +3,7 @@
 #include "endian.h"
 #include <lkl_host.h>
 
-/* XXX */
+/* FIXME */
 #ifdef RUMPRUN
 #define snprintf rumpns_snprintf
 #define memset rumpns_memset

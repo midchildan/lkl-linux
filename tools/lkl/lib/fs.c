@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <lkl_host.h>
 
-/* XXX */
+/* FIXME */
 #ifdef RUMPRUN
 #define snprintf rumpns_snprintf
 #define sscanf rumpns_sscanf

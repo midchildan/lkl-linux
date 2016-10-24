@@ -205,7 +205,7 @@ static void rump_thread_exit(void)
 
 static int rump_thread_join(lkl_thread_t tid)
 {
-	rumpuser_thread_join((void *)tid);
+	return rumpuser_thread_join((void *)tid);
 }
 
 /* time/timer */
@@ -390,7 +390,7 @@ struct lkl_host_operations lkl_host_ops = {
 
 /* entry/exit points */
 #define LKL_MEM_SIZE 100 * 1024 * 1024
-char *boot_cmdline = "";	/* FIXME: maybe we have rump_set_boot_cmdline? */
+char *boot_cmdline = "";
 static char buf[256];
 static int verbose;
 
@@ -596,16 +596,11 @@ static int rump_net_poll(struct lkl_netdev *nd)
 
 
 	while (1) {
-		/* XXX: this should be poll(pfd, 1, -1) but fiber thread
-		 * needs to be done like this...
-		 */
 		int err = poll(&pfd, 1, -1);
 		if (err < 0 && errno == EINTR)
 			continue;
 		if (err > 0)
 			break;
-		/* will be woken by poll */
-//		clock_sleep(CLOCK_REALTIME, 10, 0);
 	}
 
 	if (pfd.revents & (POLLHUP | POLLNVAL))

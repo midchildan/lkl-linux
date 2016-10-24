@@ -14,11 +14,6 @@
 #include <asm/syscalls.h>
 #include <asm/syscalls_32.h>
 
-/* FIXME */
-int lkl__sync_fetch_and_sub_4(int *ptr, int value);
-int lkl__sync_fetch_and_add_4(int *ptr, int value);
-int lkl__sync_fetch_and_and_4(long unsigned int *ptr, int value);
-
 struct syscall_thread_data;
 static asmlinkage long sys_create_syscall_thread(struct syscall_thread_data *);
 void do_signal(struct pt_regs *regs);
@@ -59,11 +54,7 @@ static LIST_HEAD(syscall_threads);
 static struct syscall *dequeue_syscall(struct syscall_thread_data *data)
 {
 
-#if defined(__ARMEL__)
-	return (struct syscall *)lkl__sync_fetch_and_and_4((long *)&data->s, 0);
-#else
-	return (struct syscall *)__sync_fetch_and_and((long *)&data->s, 0);
-#endif
+	return (struct syscall *)lkl__sync_fetch_and_and((long *)&data->s, 0);
 }
 
 static long run_syscall(struct syscall *s)
@@ -380,15 +371,9 @@ static void syscall_thread_destructor(void *_data)
 	if (!data)
 		return;
 
-#if defined(__ARMEL__)
-	if (lkl__sync_fetch_and_add_4(&destrs, 1) < MAX_SYSCALL_THREADS)
+	if (lkl__sync_fetch_and_add(&destrs, 1) < MAX_SYSCALL_THREADS)
 		__lkl_stop_syscall_thread(data, true);
-	lkl__sync_fetch_and_sub_4(&destrs, 1);
-#else
-	if (__sync_fetch_and_add(&destrs, 1) < MAX_SYSCALL_THREADS)
-		__lkl_stop_syscall_thread(data, true);
-	__sync_fetch_and_sub(&destrs, 1);
-#endif
+	lkl__sync_fetch_and_sub(&destrs, 1);
 }
 
 static void cleanup_syscall_threads(void)
@@ -396,19 +381,11 @@ static void cleanup_syscall_threads(void)
 	struct syscall_thread_data *i = NULL, *aux;
 
 	/* announce destructors that we are stopping */
-#if defined(__ARMEL__)
-	lkl__sync_fetch_and_add_4(&destrs, MAX_SYSCALL_THREADS);
+	lkl__sync_fetch_and_add(&destrs, MAX_SYSCALL_THREADS);
 
 	/* wait for any pending destructors to complete */
-	while (lkl__sync_fetch_and_add_4(&destrs, 0) > MAX_SYSCALL_THREADS)
+	while (lkl__sync_fetch_and_add(&destrs, 0) > MAX_SYSCALL_THREADS)
 		schedule_timeout(1);
-#else
-	__sync_fetch_and_add(&destrs, MAX_SYSCALL_THREADS);
-
-	/* wait for any pending destructors to complete */
-	while (__sync_fetch_and_add(&destrs, 0) > MAX_SYSCALL_THREADS)
-		schedule_timeout(1);
-#endif
 	/* no more destructors, we can safely remove the remaining threads */
 	list_for_each_entry_safe(i, aux, &syscall_threads, list) {
 		if (i == &default_syscall_thread_data)

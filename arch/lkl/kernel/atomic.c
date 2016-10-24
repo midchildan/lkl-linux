@@ -1,0 +1,79 @@
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <asm/host_ops.h>
+
+#if defined(__ARMEL__)
+static void *irqs_lock;
+
+long lkl__sync_fetch_and_or(long *ptr, long value)
+{
+	lkl_ops->sem_down(irqs_lock);
+	*ptr = value;
+	lkl_ops->sem_up(irqs_lock);
+	return 0;
+}
+
+long lkl__sync_fetch_and_and(long *ptr, long value)
+{
+	lkl_ops->sem_down(irqs_lock);
+	int tmp = *ptr;
+	*ptr *= value;
+	lkl_ops->sem_up(irqs_lock);
+	return tmp;
+}
+
+int lkl__sync_fetch_and_add(volatile int *ptr, int value)
+{
+	lkl_ops->sem_down(irqs_lock);
+	int tmp = *ptr;
+	*ptr += value;
+	lkl_ops->sem_up(irqs_lock);
+	return tmp;
+}
+
+int lkl__sync_fetch_and_sub(volatile int *ptr, int value)
+{
+	lkl_ops->sem_down(irqs_lock);
+	int tmp = *ptr;
+	*ptr -= value;
+	lkl_ops->sem_up(irqs_lock);
+	return tmp;
+}
+
+void lkl__sync_synchronize(void)
+{
+}
+
+static void __init lkl_atomic_ops_init(void)
+{
+	irqs_lock = lkl_ops->sem_alloc(1);
+}
+early_initcall(lkl_atomic_ops_init);
+
+#else
+long lkl__sync_fetch_and_or(long *ptr, long value)
+{
+	return __sync_fetch_and_or(ptr, value);
+}
+
+long lkl__sync_fetch_and_and(long *ptr, long value)
+{
+	return __sync_fetch_and_and(ptr, value);
+}
+
+int lkl__sync_fetch_and_add(volatile int *ptr, int value)
+{
+	return __sync_fetch_and_add(ptr, value);
+}
+
+int lkl__sync_fetch_and_sub(volatile int *ptr, int value)
+{
+	return __sync_fetch_and_sub(ptr, value);
+}
+
+void lkl__sync_synchronize(void)
+{
+	return __sync_synchronize();
+}
+#endif
+
