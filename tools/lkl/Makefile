@@ -79,7 +79,7 @@ else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   EXESUF   := .exe
   SOSUF    := .dll
   export CONFIG_AUTO_LKL_NT_HOST=y
-  CFLAGS += -DCONFIG_AUTO_LKL_NT_HOST
+  CFLAGS += -DCONFIG_AUTO_LKL_NT_HOST -fno-leading-underscore
 else
   $(error Unrecognized platform: $(OUTPUT_FORMAT))
 endif
