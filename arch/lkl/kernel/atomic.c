@@ -15,8 +15,10 @@ long lkl__sync_fetch_and_or(long *ptr, long value)
 
 long lkl__sync_fetch_and_and(long *ptr, long value)
 {
+	int tmp;
+
 	lkl_ops->sem_down(irqs_lock);
-	int tmp = *ptr;
+	tmp = *ptr;
 	*ptr *= value;
 	lkl_ops->sem_up(irqs_lock);
 	return tmp;
@@ -24,8 +26,10 @@ long lkl__sync_fetch_and_and(long *ptr, long value)
 
 int lkl__sync_fetch_and_add(volatile int *ptr, int value)
 {
+	int tmp;
+
 	lkl_ops->sem_down(irqs_lock);
-	int tmp = *ptr;
+	tmp = *ptr;
 	*ptr += value;
 	lkl_ops->sem_up(irqs_lock);
 	return tmp;
@@ -33,8 +37,10 @@ int lkl__sync_fetch_and_add(volatile int *ptr, int value)
 
 int lkl__sync_fetch_and_sub(volatile int *ptr, int value)
 {
+	int tmp;
+
 	lkl_ops->sem_down(irqs_lock);
-	int tmp = *ptr;
+	tmp = *ptr;
 	*ptr -= value;
 	lkl_ops->sem_up(irqs_lock);
 	return tmp;
@@ -44,9 +50,10 @@ void lkl__sync_synchronize(void)
 {
 }
 
-static void __init lkl_atomic_ops_init(void)
+static int __init lkl_atomic_ops_init(void)
 {
 	irqs_lock = lkl_ops->sem_alloc(1);
+	return 0;
 }
 early_initcall(lkl_atomic_ops_init);
 

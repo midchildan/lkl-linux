@@ -132,6 +132,7 @@ else
   export CONFIG_AUTO_LKL_VIRTIO=y
   export CONFIG_AUTO_LKL_VIRTIO_NET=y
   CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
+  CFLAGS += -UCONFIG_AUTO_LKL_POSIX_HOST
 
 # if rumprun=yes, then skip virtio-host build
 ifeq ($(rumprun),yes)
