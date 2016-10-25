@@ -43,13 +43,15 @@ struct rump_pci_sysdata {
 };
 
 /* stubs: should not called */
-int __weak rumpcomp_pci_confread(unsigned bus, unsigned dev, unsigned fun,
+int __weak rumpcomp_pci_confread(unsigned int bus, unsigned int dev,
+				 unsigned int fun,
 				 int reg, unsigned int *value)
 {
 	return 0;
 }
 
-int __weak rumpcomp_pci_confwrite(unsigned bus, unsigned dev, unsigned fun,
+int __weak rumpcomp_pci_confwrite(unsigned int bus, unsigned int dev,
+				  unsigned int fun,
 				  int reg, unsigned int value)
 {
 	return 0;
@@ -60,13 +62,14 @@ void * __weak rumpcomp_pci_map(unsigned long addr, unsigned long len)
 	return NULL;
 }
 
-int __weak rumpcomp_pci_irq_map(unsigned bus, unsigned device, unsigned fun,
-				int intrline, unsigned cookie)
+int __weak rumpcomp_pci_irq_map(unsigned int bus, unsigned int device,
+				unsigned int fun,
+				int intrline, unsigned int cookie)
 {
 	return 0;
 }
 
-void * __weak rumpcomp_pci_irq_establish(unsigned cookie,
+void * __weak rumpcomp_pci_irq_establish(unsigned int cookie,
 					 int (*handler)(void *), void *data)
 {
 	return NULL;
@@ -102,8 +105,8 @@ void *rump_pci_map_bus(struct pci_bus *bus, unsigned int devfn, int where)
 {
 	unsigned long addr;
 
-	addr =  (1<<31) | (bus->number<<16) | (PCI_SLOT(devfn) <<11) |
-		(PCI_FUNC(devfn) <<8) | (where & 0xfc);
+	addr =  (1 << 31) | (bus->number << 16) | (PCI_SLOT(devfn) << 11) |
+		(PCI_FUNC(devfn) << 8) | (where & 0xfc);
 
 	/* FIXME: length? */
 	return rumpcomp_pci_map(addr, 0);
@@ -130,13 +133,14 @@ int rump_pci_generic_write(struct pci_bus *bus, unsigned int devfn,
 		rumpcomp_pci_confwrite(bus->number, PCI_SLOT(devfn),
 				       PCI_FUNC(devfn), where, val);
 		return PCIBIOS_SUCCESSFUL;
-	} else {
-		mask = ~(((1 << (size * 8)) - 1) << ((where & 0x3) * 8));
 	}
+
+	mask = ~(((1 << (size * 8)) - 1) << ((where & 0x3) * 8));
 
 	/* This brings the way much overhead though I picked this
 	 * code from access.c.. maybe should come up with single
-	 * write method to avoid that. */
+	 * write method to avoid that.
+	 */
 
 	rumpcomp_pci_confread(bus->number, PCI_SLOT(devfn),
 			      PCI_FUNC(devfn), where, &tmp);
@@ -170,7 +174,7 @@ pciide_machdep_compat_intr_establish(device_t dev,
 	return rumpcomp_pci_irq_establish(ih, func, arg);
 }
 
-__strong_alias(pciide_machdep_compat_intr_disestablish,pci_intr_disestablish);
+__strong_alias(pciide_machdep_compat_intr_disestablish, pci_intr_disestablish);
 #endif /* __HAVE_PCIIDE_MACHDEP_COMPAT_INTR_ESTABLISH */
 
 
@@ -243,13 +247,10 @@ static int __init rump_pci_init(void)
 	int busnum = 0;
 
 	sd = kzalloc(sizeof(*sd), GFP_KERNEL);
-	if (!sd) {
-		printk(KERN_ERR "PCI: OOM, skipping PCI bus %02x\n", busnum);
+	if (!sd)
 		return -1;
-	}
 
-	printk(KERN_INFO "PCI: root bus %02x: using default resources\n",
-	       busnum);
+	pr_info("PCI: root bus %02x: using default resources\n", busnum);
 	bus = pci_scan_bus(busnum, &rump_pci_root_ops, sd);
 	if (!bus) {
 		kfree(sd);

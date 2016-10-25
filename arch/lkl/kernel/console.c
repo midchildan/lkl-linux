@@ -13,14 +13,14 @@ static void console_write(struct console *con, const char *str, unsigned len)
 	static char buf[256];
 	static int verbose = 0;
 
-        /* when console isn't NULL (not called from file_write() */
+	/* when console isn't NULL (not called from file_write() */
 	if (con && !verbose && lkl_ops->getparam &&
-            lkl_ops->getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
+		lkl_ops->getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
 		if (*buf != 0)
 			verbose = 1;
-        }
+	}
 
-        if (con && !verbose)
+	if (con && !verbose)
 		return;
 
 	if (lkl_ops->print)
@@ -77,15 +77,14 @@ static ssize_t file_read(struct file *file, char __user *buf, size_t size,
 	iov.iov_len = size;
 
 	err = rumpuser_iovread(0, &iov, 1, 0, &ret);
-	if (err == 0) {
+	if (err == 0)
 		return ret;
-	}
 
 #endif
 	return -err;
 }
 
-static struct file_operations lkl_stdio_fops = {
+static const struct file_operations lkl_stdio_fops = {
 	.owner		= THIS_MODULE,
 	.write =	file_write,
 	.read =		file_read,
@@ -98,7 +97,7 @@ static int __init lkl_stdio_init(void)
 	/* prepare /dev/console */
 	err = register_chrdev(TTYAUX_MAJOR, "console", &lkl_stdio_fops);
 	if (err < 0) {
-		printk(KERN_ERR "can't register lkl stdio console.\n");
+		pr_err("can't register lkl stdio console.\n");
 		return err;
 	}
 
@@ -116,7 +115,7 @@ static int __init lkl_memdev_init(void)
 			S_IFCHR | S_IRUSR | S_IWUSR,
 			new_encode_dev(MKDEV(MEM_MAJOR, 3)));
 	if (err < 0) {
-		printk(KERN_ERR "can't register /dev/null.\n");
+		pr_err("can't register /dev/null.\n");
 		return err;
 	}
 

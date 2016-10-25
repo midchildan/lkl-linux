@@ -6,7 +6,7 @@
  */
 
 #define __dead
-#define __printflike(x,y)
+#define __printflike(x, y)
 #include <rump/rumpuser.h>
 
 struct irq_data;

@@ -24,7 +24,7 @@ long lkl__sync_fetch_and_and(long *ptr, long value)
 	return tmp;
 }
 
-int lkl__sync_fetch_and_add(volatile int *ptr, int value)
+int lkl__sync_fetch_and_add(int *ptr, int value)
 {
 	int tmp;
 
@@ -35,7 +35,7 @@ int lkl__sync_fetch_and_add(volatile int *ptr, int value)
 	return tmp;
 }
 
-int lkl__sync_fetch_and_sub(volatile int *ptr, int value)
+int lkl__sync_fetch_and_sub(int *ptr, int value)
 {
 	int tmp;
 
@@ -68,12 +68,12 @@ long lkl__sync_fetch_and_and(long *ptr, long value)
 	return __sync_fetch_and_and(ptr, value);
 }
 
-int lkl__sync_fetch_and_add(volatile int *ptr, int value)
+int lkl__sync_fetch_and_add(int *ptr, int value)
 {
 	return __sync_fetch_and_add(ptr, value);
 }
 
-int lkl__sync_fetch_and_sub(volatile int *ptr, int value)
+int lkl__sync_fetch_and_sub(int *ptr, int value)
 {
 	return __sync_fetch_and_sub(ptr, value);
 }

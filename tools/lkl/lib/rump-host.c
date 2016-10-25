@@ -16,22 +16,19 @@
 #include <poll.h>
 #include <sys/uio.h>
 
+#include <lkl_host.h>
+#include "iomem.h"
+#include "rump.h"
+
+
 /* FIXME */
 #ifdef RUMPRUN
 #define memset rumpns_memset
 #endif
 
-#include "rump.h"
-
-#include <lkl_host.h>
-#include "iomem.h"
-
-#define BIT(x) (1ULL << x)
-
 /* FIXME */
-#define clock_sleep(a, b, c) __sched_clock_sleep(a, b, c)
-int clock_sleep(int clk, int64_t sec, long nsec);
-
+#define BIT(x) (1ULL << x)
+#define NSEC_PER_SEC	1000000000L
 #define container_of(ptr, type, member) \
 	(type *)((char *)(ptr) - __builtin_offsetof(type, member))
 
@@ -40,7 +37,6 @@ int *__errno(void);
 #undef errno
 #define errno (*__errno())
 
-#define NSEC_PER_SEC	1000000000L
 
 /* console */
 static void rump_print(const char *str, int len)
@@ -209,9 +205,6 @@ static int rump_thread_join(lkl_thread_t tid)
 }
 
 /* time/timer */
-/* FIXME: should be included from somewhere */
-int rumpuser__errtrans(int);
-
 static bool threads_are_go;
 static struct rumpuser_mtx *thrmtx;
 static struct rumpuser_cv *thrcv;
@@ -237,9 +230,8 @@ static void *rump_timer_trampoline(void *arg)
 	/* don't allow threads to run before all CPUs have fully attached */
 	if (!threads_are_go) {
 		rumpuser_mutex_enter_nowrap(thrmtx);
-		while (!threads_are_go) {
+		while (!threads_are_go)
 			rumpuser_cv_wait_nowrap(thrcv, thrmtx);
-		}
 		rumpuser_mutex_exit(thrmtx);
 	}
 
@@ -251,14 +243,14 @@ static void *rump_timer_trampoline(void *arg)
 					    td->timeout.tv_sec,
 					    td->timeout.tv_nsec);
 		if (td->canceled) {
-			if (!td->thrid) {
+			if (!td->thrid)
 				rumpuser_free(td, 0);
-			}
 			goto end;
 		}
 		rumpuser_mutex_exit(td->mtx);
-		/* FIXME: we should not use rumpuser__errtrans here */
-		/* FIXME: 60=>ETIMEDOUT(netbsd) rumpuser__errtrans(ETIMEDOUT)) */
+		/* FIXME: we should not use rumpuser__errtrans here
+		 * 60==ETIMEDOUT(netbsd), rumpuser__errtrans(ETIMEDOUT))
+		 */
 		if (err && err != 60)
 			goto end;
 	}
@@ -295,9 +287,8 @@ static void rump_timer_cancel(void *timer)
 static void rump_thread_allow(struct lwp *l)
 {
 	rumpuser_mutex_enter(thrmtx);
-	if (l == NULL) {
+	if (l == NULL)
 		threads_are_go = true;
-	}
 
 	rumpuser_cv_broadcast(thrcv);
 	rumpuser_mutex_exit(thrmtx);
@@ -306,6 +297,7 @@ static void rump_thread_allow(struct lwp *l)
 static unsigned long long time_ns(void)
 {
 	struct timespec ts;
+
 	rumpuser_clock_gettime(RUMPUSER_CLOCK_RELWALL, (int64_t *)&ts.tv_sec,
 			       &ts.tv_nsec);
 
@@ -351,7 +343,6 @@ static void panic(void)
 	rumpuser_exit(RUMPUSER_PANIC);
 }
 
-extern char lkl_virtio_devs[];
 struct lkl_host_operations lkl_host_ops = {
 	.panic = panic,
 	.thread_create = rump_thread_create,
@@ -389,7 +380,7 @@ struct lkl_host_operations lkl_host_ops = {
 
 
 /* entry/exit points */
-#define LKL_MEM_SIZE 100 * 1024 * 1024
+#define LKL_MEM_SIZE (100 * 1024 * 1024)
 char *boot_cmdline = "";
 static char buf[256];
 static int verbose;
@@ -398,7 +389,7 @@ int rump_init(void)
 {
 	if (rumpuser_init(RUMPUSER_VERSION, &hyp) != 0) {
 		rumpuser_dprintf("rumpuser init failed\n");
-		return EINVAL;
+		return -EINVAL;
 	}
 
 	rumpuser_mutex_init(&thrmtx, RUMPUSER_MTX_SPIN);
@@ -409,7 +400,8 @@ int rump_init(void)
 
 	rump_thread_allow(NULL);
 	/* FIXME: rumprun doesn't have sysproxy.
-	 * maybe outsourced and linked -lsysproxy for hijack case ? */
+	 * maybe outsourced and linked -lsysproxy for hijack case ?
+	 */
 #ifdef ENABLE_SYSPROXY
 	rump_sysproxy_init();
 #endif
@@ -445,24 +437,68 @@ enum rump_etfs_type {
 	RUMP_ETFS_DIR_SUBDIRS
 };
 
-void rump_boot_setsigmodel(int rump_sigmodel){}
-int rump_pub_etfs_register(const char *key, const char *hostpath, enum rump_etfs_type ftype){return 0;}
+void rump_boot_setsigmodel(int rump_sigmodel)
+{
+}
+
+int rump_pub_etfs_register(const char *key, const char *hostpath,
+			   enum rump_etfs_type ftype)
+{
+	return 0;
+}
+
 int rump_pub_etfs_register_withsize(const char *key, const char *hostpath,
-	enum rump_etfs_type ftype, uint64_t begin, uint64_t size) {return 0;}
-int rump___sysimpl_mount50(const char *str, const char *str2, int i, void *p, size_t s){return 0;}
+				    enum rump_etfs_type ftype, uint64_t begin,
+				    uint64_t size)
+{
+	return 0;
+}
+
+int rump___sysimpl_mount50(const char *str, const char *str2, int i,
+			   void *p, size_t s)
+{
+	return 0;
+}
 
 int rump___sysimpl_dup2(int i, int j)
 {
 	return 0;
-	return lkl_sys_dup2(i, j);
 }
-int rump___sysimpl_socket30(int i, int j, int k){return 0;}
-int rump___sysimpl_unmount(const char *str, int i){return 0;}
-void __assert13(const char *file, int line, const char *function, const char *failedexpr){}
-int rump___sysimpl_close(int fd) {return -1;}
-int rump___sysimpl_ioctl(int fd, u_long com, void * data) {return -1;}
-int rump___sysimpl_mkdir(const char * path, mode_t mode) {return -1;}
-int rump___sysimpl_open(const char *name, int flags, ...) {return -1;}
+
+int rump___sysimpl_socket30(int i, int j, int k)
+{
+	return 0;
+}
+
+int rump___sysimpl_unmount(const char *str, int i)
+{
+	return 0;
+}
+
+void __assert13(const char *file, int line, const char *function,
+		const char *failedexpr)
+{
+}
+
+int rump___sysimpl_close(int fd)
+{
+	return -1;
+}
+
+int rump___sysimpl_ioctl(int fd, u_long com, void *data)
+{
+	return -1;
+}
+
+int rump___sysimpl_mkdir(const char *path, mode_t mode)
+{
+	return -1;
+}
+
+int rump___sysimpl_open(const char *name, int flags, ...)
+{
+	return -1;
+}
 
 #endif /* RUMP_TEMP_STUB */
 
@@ -473,12 +509,12 @@ int lkl_netdevs_remove(void)
 }
 #else
 /* FIXME */
-static __inline long __syscall3(long n, long a1, long a2, long a3)
+static inline long __syscall3(long n, long a1, long a2, long a3)
 {
 	unsigned long ret;
 #ifdef __x86_64__
 	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
-						  "d"(a3) : "rcx", "r11", "memory");
+			      "d"(a3) : "rcx", "r11", "memory");
 #endif
 	return ret;
 }
@@ -489,7 +525,9 @@ static off_t x8664_lseek(int fd, off_t offset, int whence)
 {
 #ifdef SYS__llseek
 	off_t result;
-	return syscall(SYS__llseek, fd, offset>>32, offset, &result, whence) ? -1 : result;
+
+	return syscall(SYS__llseek, fd, offset >> 32, offset, &result, whence)
+		? -1 : result;
 #else
 	return __syscall3(SYS_lseek, fd, offset, whence);
 #endif
@@ -597,6 +635,7 @@ static int rump_net_poll(struct lkl_netdev *nd)
 
 	while (1) {
 		int err = poll(&pfd, 1, -1);
+
 		if (err < 0 && errno == EINTR)
 			continue;
 		if (err > 0)

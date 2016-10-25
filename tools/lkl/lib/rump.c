@@ -87,7 +87,7 @@ rump_pub_lwproc_releaselwp(void)
 struct lwp *
 rump_pub_lwproc_curlwp(void)
 {
-	struct lwp * rv;
+	struct lwp *rv;
 
 	rump_schedule();
 	rv = rump_lkl_lwproc_curlwp();

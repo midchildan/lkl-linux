@@ -36,10 +36,15 @@ LDFLAGS_vmlinux += -r
 
 ifeq ($(buildrump),yes)
 # objcopy trick is taken from rumpkernel
-GCCSYMBOLS=__umoddi3|__udivdi3|__aeabi_idiv|__aeabi_idivmod|__aeabi_llsl|__aeabi_llsr|__aeabi_uidiv|__aeabi_uidivmod|__aeabi_uldivmod
-GCCATOMIC=__sync_synchronize|__sync_fetch_and_sub_4|__sync_fetch_and_add_4|__sync_fetch_and_and_4|__sync_fetch_and_or_4
+GCCSYMBOLS=__umoddi3|__udivdi3|__aeabi_idiv|__aeabi_idivmod|__aeabi_llsl
+GCCSYMBOLS+=|__aeabi_llsr|__aeabi_uidiv|__aeabi_uidivmod|__aeabi_uldivmod
+GCCATOMIC=__sync_synchronize|__sync_fetch_and_sub_4|__sync_fetch_and_add_4
+GCCATOMIC+=|__sync_fetch_and_and_4|__sync_fetch_and_or_4
 VMLINUX_SYMS=__start___ex_table|__stop___ex_table|boot_cmdline
-EXP_SYMRENAME=rump|RUMP|bmk_|lib_|nuse_|lkl_|__tls|__initcall_start|__initcall_end|__gcov|_end|_GLOBAL_OFFSET_TABLE|${GCCSYMBOLS}|${GCCATOMIC}'${_SYMQUIRK}'${RUMP_SYM_NORENAME:D|${RUMP_SYM_NORENAME}}|${VMLINUX_SYMS}|__assert13
+EXP_SYMRENAME=rump|RUMP|bmk_|lib_|nuse_|lkl_|__tls|__initcall_start
+EXP_SYMRENAME+=|__initcall_end|__gcov|_end|_GLOBAL_OFFSET_TABLE|__assert13
+EXP_SYMRENAME+=|${GCCSYMBOLS}|${GCCATOMIC}'${_SYMQUIRK}'
+EXP_SYMRENAME+=${RUMP_SYM_NORENAME:D|${RUMP_SYM_NORENAME}}|${VMLINUX_SYMS}
 
 define make_ns_symbols
 	${Q}echo "  OBJCPY	" $1 $2;	\
@@ -47,8 +52,9 @@ define make_ns_symbols
 	$$NF!~/^'${_PQ}'(${EXP_SYMRENAME})/ \
 	{s=$$NF;sub(/^'${_PQ}'/, "&rumpns_", s); print $$NF, s}'\
 	| sort | uniq  > $2.renametab; \
-	$(OBJCOPY) -R .eh_frame -L __start___ex_table -L __stop___ex_table --preserve-dates \
-	 --redefine-syms $2.renametab $1 $2; \
+	$(OBJCOPY) -R .eh_frame -L __start___ex_table \
+	-L __stop___ex_table --preserve-dates \
+	--redefine-syms $2.renametab $1 $2; \
 	rm -f $2.renametab
 endef
 else

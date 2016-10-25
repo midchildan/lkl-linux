@@ -16,16 +16,15 @@
 
 /* handle rump remote client */
 static inline __must_check long __copy_from_user(void *to,
-		const void __user * from, unsigned long n)
+		const void __user *from, unsigned long n)
 {
 	int error = 0;
 	struct thread_info *ti;
 
 	ti = current_thread_info();
 
-	if (unlikely(from == NULL && n)) {
-		return EFAULT;
-	}
+	if (unlikely(from == NULL && n))
+		return -EFAULT;
 
 	if (!ti->rump_client) {
 		memcpy(to, from, n);
@@ -39,7 +38,7 @@ static inline __must_check long __copy_from_user(void *to,
 
 	return error;
 }
-#define __copy_from_user(to,from,n) __copy_from_user(to,from,n)
+#define __copy_from_user(to, from, n) __copy_from_user(to, from, n)
 
 static inline __must_check long __copy_to_user(void __user *to,
 		const void *from, unsigned long n)
@@ -49,14 +48,12 @@ static inline __must_check long __copy_to_user(void __user *to,
 
 	ti = current_thread_info();
 
-	if (unlikely(to == NULL && n)) {
-		return EFAULT;
-	}
+	if (unlikely(to == NULL && n))
+		return -EFAULT;
 
 	if (!ti->rump_client) {
 		memcpy(to, from, n);
-	}
-	else if (n) {
+	} else if (n) {
 #ifdef ENABLE_SYSPROXY
 		error = rumpuser_sp_copyout(ti->rump_client, from, to, n);
 #else
@@ -66,7 +63,7 @@ static inline __must_check long __copy_to_user(void __user *to,
 
 	return error;
 }
-#define __copy_to_user(to,from,n) __copy_to_user(to,from,n)
+#define __copy_to_user(to, from, n) __copy_to_user(to, from, n)
 
 #include <asm-generic/uaccess.h>
 
