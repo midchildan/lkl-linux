@@ -45,8 +45,6 @@ static inline void set_irq_status(int irq)
 	lkl__sync_fetch_and_or(&irq_index_status, BIT(index));
 }
 
-#define IRQ_BIT(x)			BIT(x-1)
-
 static struct irq_info {
 	const char *user;
 } irqs[NR_IRQS];

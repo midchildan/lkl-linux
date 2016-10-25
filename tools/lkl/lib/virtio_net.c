@@ -157,7 +157,6 @@ void poll_thread(void *arg)
 			virtio_process_queue(&dev->dev, 0);
 		if (ret & LKL_DEV_NET_POLL_TX)
 			virtio_process_queue(&dev->dev, 1);
-
 	} while (1);
 }
 
