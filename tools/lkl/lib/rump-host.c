@@ -497,41 +497,11 @@ int rump___sysimpl_open(const char *name, int flags, ...)
 #endif /* RUMP_TEMP_STUB */
 
 #ifndef RUMPRUN
-/* FIXME */
-static inline long __syscall3(long n, long a1, long a2, long a3)
-{
-	unsigned long ret;
-#ifdef __x86_64__
-	__asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
-			      "d"(a3) : "rcx", "r11", "memory");
-#endif
-	return ret;
-}
-
-#define SYS_lseek				8
-
-static off_t x8664_lseek(int fd, off_t offset, int whence)
-{
-#ifdef SYS__llseek
-	off_t result;
-
-	return syscall(SYS__llseek, fd, offset >> 32, offset, &result, whence)
-		? -1 : result;
-#else
-	return __syscall3(SYS_lseek, fd, offset, whence);
-#endif
-}
-#define SEEK_SET 0
-#define SEEK_CUR 1
-#define SEEK_END 2
-
-
 static int fd_get_capacity(struct lkl_disk disk, unsigned long long *res)
 {
 	off_t off;
 
-	/* FIXME */
-	off = x8664_lseek(disk.fd, 0, SEEK_END);
+	off = lseek(disk.fd, 0, SEEK_END);
 	if (off < 0)
 		return -1;
 
