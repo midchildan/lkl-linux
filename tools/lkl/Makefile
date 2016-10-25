@@ -95,7 +95,7 @@ endif
 export OUTPUT
 
 ALL_PROGRAMS := $(OUTPUT)lklfuse$(EXESUF) $(OUTPUT)cptofs$(EXESUF) $(OUTPUT)cpfromfs$(EXESUF) $(OUTPUT)fs2tar$(EXESUF)
-ALL_LIBRARIES := $(OUTPUT)liblkl.a $(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF)
+ALL_LIBRARIES := $(OUTPUT)liblkl.a $(OUTPUT)liblkl$(SOSUF)
 
 static: $(OUTPUT)liblkl.a
 shared: $(OUTPUT)liblkl$(SOSUF)
@@ -174,15 +174,16 @@ $(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)
 # because of libdl, liblkl-hijack will not compile on windows
 # arm-android neither for the moment
 ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
-  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  all: $(ALL_LIBRARIES)
   install: headers_install libraries_install programs_install
 else ifneq (,$(wildcard $(RUMP_INCLUDE)))
-  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-  install: headers_install
+  all: $(ALL_LIBRARIES)
+  install: headers_install libraries_install
 else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
-  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  all: $(ALL_LIBRARIES)
   install: headers_install libraries_install programs_install
 else
+  ALL_LIBRARIES := $(ALL_LIBRARIES) $(OUTPUT)liblkl-hijack$(SOSUF)
   all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
   install: headers_install libraries_install programs_install
 endif
