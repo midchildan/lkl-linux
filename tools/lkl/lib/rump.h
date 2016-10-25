@@ -9,9 +9,7 @@
 #define __printflike(x, y)
 #include <rump/rumpuser.h>
 
-/* FIXME */
 #ifdef RUMPRUN
-
 #define sscanf rumpns_sscanf
 extern int sscanf(const char *, const char *, ...);
 

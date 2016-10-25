@@ -1,7 +1,10 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <lkl_host.h>
+
+#ifdef RUMPUSER
 #include "rump.h"
+#endif
 
 static const char * const lkl_err_strings[] = {
 	"Success",

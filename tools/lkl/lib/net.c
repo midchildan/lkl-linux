@@ -1,6 +1,9 @@
 #include "endian.h"
 #include <lkl_host.h>
+
+#ifdef RUMPUSER
 #include "rump.h"
+#endif
 
 static inline void set_sockaddr(struct lkl_sockaddr_in *sin, unsigned int addr,
 				unsigned short port)
