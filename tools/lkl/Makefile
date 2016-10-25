@@ -175,11 +175,13 @@ $(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)
 # arm-android neither for the moment
 ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
-  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  install: headers_install libraries_install programs_install
 else ifneq (,$(wildcard $(RUMP_INCLUDE)))
   all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-  install: headers_install libraries_install
+  install: headers_install
+else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
+  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  install: headers_install libraries_install programs_install
 else
   all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
   install: headers_install libraries_install programs_install
