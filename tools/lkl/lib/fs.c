@@ -1,19 +1,6 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include <lkl_host.h>
-
-/* FIXME */
-#ifdef RUMPRUN
-#define snprintf rumpns_snprintf
-#define sscanf rumpns_sscanf
-#define strncat rumpns_strncat
-#define strlen rumpns_strlen
-#define strncmp rumpns_strncmp
-#define strncpy rumpns_strncpy
-#endif
-
 #include "virtio.h"
+#include "rump.h"
 
 #define MAX_FSTYPE_LEN 50
 int lkl_mount_fs(char *fstype)

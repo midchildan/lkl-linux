@@ -7,7 +7,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 #include <time.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -20,11 +19,6 @@
 #include "iomem.h"
 #include "rump.h"
 
-
-/* FIXME */
-#ifdef RUMPRUN
-#define memset rumpns_memset
-#endif
 
 /* FIXME */
 #define BIT(x) (1ULL << x)
@@ -502,12 +496,7 @@ int rump___sysimpl_open(const char *name, int flags, ...)
 
 #endif /* RUMP_TEMP_STUB */
 
-#ifdef RUMPRUN
-int lkl_netdevs_remove(void)
-{
-	return 0;
-}
-#else
+#ifndef RUMPRUN
 /* FIXME */
 static inline long __syscall3(long n, long a1, long a2, long a3)
 {

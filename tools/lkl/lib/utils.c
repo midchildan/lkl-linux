@@ -1,11 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <lkl_host.h>
-
-/* XXX */
-#ifdef RUMPRUN
-#define vsnprintf rumpns_vsnprintf
-#endif
+#include "rump.h"
 
 static const char * const lkl_err_strings[] = {
 	"Success",

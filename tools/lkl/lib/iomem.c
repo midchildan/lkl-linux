@@ -105,11 +105,13 @@ int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
 			return 0;
 		} else if (size == 8) {
 #ifdef __x86_64__
-			lkl_host_ops.panic("not implemented yet");
+			lkl_printf("not implemented yet\n");
+			lkl_host_ops.panic();
 #elif __arm__
 #endif
 		} else {
-			lkl_host_ops.panic("not implemented yet");
+			lkl_printf("not implemented yet\n");
+			lkl_host_ops.panic();
 		}
 	} else {
 		if (size == 1) {
@@ -141,11 +143,13 @@ int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
 			return 0;
 		} else if (size == 8) {
 #ifdef __x86_64__
-			lkl_host_ops.panic("not implemented yet");
+			lkl_printf("not implemented yet\n");
+			lkl_host_ops.panic();
 #elif __arm__
 #endif
 		} else {
-			lkl_host_ops.panic("not implemented yet");
+			lkl_printf("not implemented yet\n");
+			lkl_host_ops.panic();
 		}
 	}
 #else  /* !RUMPRUN */

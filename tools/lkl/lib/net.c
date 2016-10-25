@@ -1,14 +1,6 @@
-#include <string.h>
-#include <stdio.h>
 #include "endian.h"
 #include <lkl_host.h>
-
-/* FIXME */
-#ifdef RUMPRUN
-#define snprintf rumpns_snprintf
-#define memset rumpns_memset
-#define memcmp rumpns_memcmp
-#endif
+#include "rump.h"
 
 static inline void set_sockaddr(struct lkl_sockaddr_in *sin, unsigned int addr,
 				unsigned short port)
