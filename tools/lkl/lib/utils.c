@@ -4,6 +4,9 @@
 
 #ifdef RUMPUSER
 #include "rump.h"
+#else
+#include <stdio.h>
+#include <string.h>
 #endif
 
 static const char * const lkl_err_strings[] = {

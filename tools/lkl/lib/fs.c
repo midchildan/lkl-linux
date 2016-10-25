@@ -3,6 +3,9 @@
 
 #ifdef RUMPUSER
 #include "rump.h"
+#else
+#include <stdio.h>
+#include <string.h>
 #endif
 
 #define MAX_FSTYPE_LEN 50

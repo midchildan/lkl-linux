@@ -3,6 +3,9 @@
 
 #ifdef RUMPUSER
 #include "rump.h"
+#else
+#include <stdio.h>
+#include <string.h>
 #endif
 
 static inline void set_sockaddr(struct lkl_sockaddr_in *sin, unsigned int addr,
