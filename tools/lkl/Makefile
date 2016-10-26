@@ -40,9 +40,9 @@ export srctree
 
 # Target build configuration
 
-export CFLAGS += -I$(OUTPUT)/include -Iinclude -Wall -g -O2 -Wextra -Wno-unused-parameter \
-	  -Wno-missing-field-initializers -fno-strict-aliasing \
-	  -U_FORTIFY_SOURCE -fno-stack-protector
+export CFLAGS += -I$(OUTPUT)/include -Iinclude -Wall -g -O2 -Wextra \
+	 -Wno-unused-parameter \
+	 -Wno-missing-field-initializers -fno-strict-aliasing
 
 OUTPUT_FORMAT = $(shell $(LD) -r -print-output-format)
 OUTPUT_DEF = $(shell echo | $(CC) -dM -E -)

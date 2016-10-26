@@ -2,11 +2,6 @@ include arch/lkl/auto.conf
 
 KBUILD_CFLAGS += -fno-builtin
 
-ifeq ($(DEBUG),yes)
-# This will make liblkl.a huge (180MB~?)
-CFLAGS_KERNEL += -g3 -DDEBUG
-endif
-
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf64-x86-64-freebsd elf32-littlearm ))
 KBUILD_CFLAGS += -fPIC
 else ifeq ($(OUTPUT_FORMAT),pe-i386)
@@ -29,8 +24,6 @@ NPROC=$(shell sysctl -n hw.ncpu)
 else
 NPROC=$(shell nproc)
 endif
-
-KBUILD_CFLAGS += -Iarch/lkl/kernel
 
 LDFLAGS_vmlinux += -r
 

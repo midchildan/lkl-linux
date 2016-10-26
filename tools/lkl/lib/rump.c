@@ -120,7 +120,7 @@ rump_lkl_hyp_syscall(int num, void *arg, long *retval)
 static int
 rump_lkl_lwproc_rfork(void *priv, int flags, const char *comm)
 {
-#ifdef FIXME
+#ifdef ENABLE_SYSPROXY
 	/* FIXME: needs new task_struct instead of get_current() */
 	struct thread_info *ti = task_thread_info(get_current());
 
