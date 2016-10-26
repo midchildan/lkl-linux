@@ -189,11 +189,12 @@ else
 endif
 
 clean:
-	$(call QUIET_CLEAN, objects)find . -name '*.o' -delete -o -name '\.*.cmd' -delete -o -name '\.*.d' -delete
-	$(call QUIET_CLEAN, headers)$(RM) -r include/lkl/
-	$(call QUIET_CLEAN, "host libraries")$(RM) liblkl.a liblkl$(SOSUF)
-	$(call QUIET_CLEAN, "hijack library")$(RM) liblkl-hijack$(SOSUF)
-	$(call QUIET_CLEAN, programs)$(RM) lklfuse$(EXESUF) fs2tar$(EXESUF) cptofs$(EXESUF) cpfromfs$(EXESUF)
+	$(call QUIET_CLEAN, objects)find $(OUTPUT) -name '*.o' -delete -o -name '\.*.cmd'\
+	 -delete -o -name '\.*.d' -delete
+	$(call QUIET_CLEAN, headers)$(RM) -r $(OUTPUT)/include/lkl/
+	$(call QUIET_CLEAN, "host libraries")$(RM) $(OUTPUT)/liblkl.a liblkl$(SOSUF)
+	$(call QUIET_CLEAN, "hijack library")$(RM) $(OUTPUT)/liblkl-hijack$(SOSUF)
+	$(call QUIET_CLEAN, programs)$(RM) $(ALL_PROGRAMS)
 	$(call QUIET_CLEAN, tests)$(RM) tests/boot tests/net-test
 
 $(TEST_TARGETS):
