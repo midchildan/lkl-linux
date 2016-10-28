@@ -16,6 +16,7 @@
 #include <asm/cpu.h>
 #include <asm/sched.h>
 
+void do_signal(struct pt_regs *regs);
 static asmlinkage long sys_virtio_mmio_device_add(long base, long size,
 						  unsigned int irq);
 
@@ -44,6 +45,7 @@ static long run_syscall(long no, long *params)
 				params[4], params[5]);
 
 	task_work_run();
+	do_signal(NULL);
 
 	return ret;
 }
