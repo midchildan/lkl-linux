@@ -127,6 +127,8 @@ struct lkl_host_operations {
 	int (*irq_request)(struct irq_data *data);
 	void (*irq_release)(struct irq_data *data);
 
+	int (*getparam)(const char *name, void *buf, int buflen);
+
 	long (*gettid)(void);
 
 	void (*jmp_buf_set)(struct lkl_jmp_buf *jmpb, void (*f)(void));
