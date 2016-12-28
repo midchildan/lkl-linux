@@ -221,6 +221,8 @@ hijack_init(void)
 	char *gateway6 = getenv("LKL_HIJACK_NET_GATEWAY6");
 	char *debug = getenv("LKL_HIJACK_DEBUG");
 	char *mount = getenv("LKL_HIJACK_MOUNT");
+	char *memsize_str = getenv("LKL_HIJACK_MEMSIZE");
+	unsigned long memsize = 64 * 1024 * 1024UL;
 	struct lkl_netdev_args nd_args;
 	char *neigh_entries = getenv("LKL_HIJACK_NET_NEIGHBOR");
 	char *qdisc_entries = getenv("LKL_HIJACK_NET_QDISC");
@@ -350,7 +352,11 @@ hijack_init(void)
 	if ((ip && !strcmp(ip, "dhcp")) && (nd_id != -1))
 		snprintf(boot_cmdline, sizeof(boot_cmdline), "ip=dhcp");
 
-	ret = lkl_start_kernel(&lkl_host_ops, 64 * 1024 * 1024UL, boot_cmdline);
+	/* parse mem size */
+	if (memsize_str)
+		memsize = memparse(memsize_str, NULL);
+
+	ret = lkl_start_kernel(&lkl_host_ops, memsize, boot_cmdline);
 	if (ret) {
 		fprintf(stderr, "can't start kernel: %s\n", lkl_strerror(ret));
 		return;
