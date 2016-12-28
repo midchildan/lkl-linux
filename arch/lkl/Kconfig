@@ -26,6 +26,7 @@ config LKL
        select TCP_CONG_BBR
        select NET_SCHED
        select NET_SCH_FQ
+       select HIGH_RES_TIMERS
 
 config OUTPUTFORMAT
        string
