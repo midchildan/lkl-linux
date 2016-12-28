@@ -245,6 +245,14 @@ are the list of those variable for your environment.
 ```
      $ LKL_HIJACK_MEM=1G lkl-hijack.sh ip address show
 ```
+* LKL_HIJACK_MEM
+
+  Configure sysctl values of the booted kernel via the hijack library. Multiple
+  entries can be specified.
+```
+     $ LKL_HIJACK_SYSCTL="net.ipv4.tcp_wmem|4096 87380 2147483647"
+     ./bin/lkl-hijack.sh ip address show
+```
 
 FAQ
 ===

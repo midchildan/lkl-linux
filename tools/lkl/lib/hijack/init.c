@@ -126,6 +126,28 @@ static void add_qdisc(int ifindex, char* entries)
 	return;
 }
 
+/* Configure sysctl parameters as the form of "key|value;key|value;..." */
+static void sysctl_write(char* sysctls)
+{
+	char *saveptr = NULL, *token = NULL;
+	char *key = NULL, *value = NULL;
+	int ret = 0;
+
+	for (token = strtok_r(sysctls, ";", &saveptr); token;
+	     token = strtok_r(NULL, ";", &saveptr)) {
+		key = strtok(token, "|");
+		value = strtok(NULL, "|");
+		ret = lkl_sysctl(key, value);
+		if (ret) {
+			fprintf(stderr,
+				"Failed to configure sysctl entries: %s\n",
+				lkl_strerror(ret));
+			return;
+		}
+	}
+	return;
+}
+
 /* We don't have an easy way to make FILE*s out of our fds, so we
  * can't use e.g. fgets */
 static int dump_file(char *path)
@@ -243,6 +265,7 @@ hijack_init(void)
 	char *offload1 = getenv("LKL_HIJACK_OFFLOAD");
 	int offload = 0;
 	char boot_cmdline[256] = "\0";
+	char *sysctls = getenv("LKL_HIJACK_SYSCTL");
 
 	memset(&nd_args, 0, sizeof(struct lkl_netdev_args));
 	if (!debug) {
@@ -456,6 +479,9 @@ hijack_init(void)
 
 	if (mount)
 		mount_cmds_exec(mount, lkl_mount_fs);
+
+	if (sysctls)
+		sysctl_write(sysctls);
 
 	if (nd_ifindex >=0 && neigh_entries)
 		add_neighbor(nd_ifindex, neigh_entries);
