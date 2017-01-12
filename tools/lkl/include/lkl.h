@@ -455,6 +455,23 @@ int lkl_if_wait_ipv6_dad(int ifindex, void *addr);
  */
 int lkl_set_fd_limit(unsigned int fd_limit);
 
+/**
+ * lkl_qdisc_add - set qdisc rule onto an interface
+ *
+ * @ifindex - the ifindex of the interface
+ * @root - the name of root class (e.g., "root");
+ * @type - the type of qdisc (e.g., "fq")
+ */
+int lkl_qdisc_add(int ifindex, char *root, char *type);
+
+/**
+ * lkl_sysctl - write a sysctl value
+ *
+ * @path - the path to an sysctl entry (e.g., "net.ipv4.tcp_wmem");
+ * @value - the value of the sysctl (e.g., "4096 87380 2147483647")
+ */
+int lkl_sysctl(char *path, char *value);
+
 #ifdef __cplusplus
 }
 #endif

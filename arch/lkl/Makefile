@@ -53,7 +53,7 @@ endef
 else
 LKL_ENTRY_POINTS := lkl_start_kernel lkl_sys_halt lkl_syscall lkl_trigger_irq \
 	lkl_get_free_irq lkl_put_irq lkl_create_syscall_thread \
-	lkl_stop_syscall_thread lkl_is_running
+	lkl_stop_syscall_thread lkl_is_running memparse
 define make_ns_symbols
 	$(OBJCOPY) -R .eh_frame -R .syscall_defs $(foreach sym,$(LKL_ENTRY_POINTS),\
 	-G$(prefix)$(sym)) vmlinux lkl.o

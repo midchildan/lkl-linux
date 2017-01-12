@@ -202,6 +202,12 @@ are the list of those variable for your environment.
      $ LKL_HIJACK_NET_NEIGHBOR="192.168.13.100|12:34:56:78:9a:bc;2001:db8:0:f101::3|12:34:56:78:9a:be"
      lkl-hijack.sh ip neighbor show
 ```
+* LKL_HIJACK_NET_QDISC
+
+  Add a qdisc entry in the form of "ip|mac;ip|mac;...".
+```
+     $ LKL_HIJACK_NET_QDISC="root|fq" lkl-hijack.sh tc qdisc
+```
 * LKL_HIJACK_DEBUG
 
   Setting it causes some debug information (both from the kernel and the
@@ -231,6 +237,21 @@ are the list of those variable for your environment.
   See virtio_net.h for a list of offload features and their bit masks.
 ```
      $ LKL_HIJACK_OFFLOAD=0x8002 lkl-hijack.sh ./netserver -D -f
+```
+* LKL_HIJACK_MEM
+
+  Specify the memory size of booted kernel via the hijack library.  The number
+  you can specify is potentially suffixed with K, M, G, T, P, E (lib/cmdline.c).
+```
+     $ LKL_HIJACK_MEM=1G lkl-hijack.sh ip address show
+```
+* LKL_HIJACK_MEM
+
+  Configure sysctl values of the booted kernel via the hijack library. Multiple
+  entries can be specified.
+```
+     $ LKL_HIJACK_SYSCTL="net.ipv4.tcp_wmem|4096 87380 2147483647"
+     ./bin/lkl-hijack.sh ip address show
 ```
 
 FAQ

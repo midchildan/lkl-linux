@@ -105,6 +105,49 @@ static void add_neighbor(int ifindex, char* entries) {
 	return;
 }
 
+/* Add a qdisc entry for an interface in the form of "root|type;root|type;..." */
+static void add_qdisc(int ifindex, char* entries)
+{
+	char *saveptr = NULL, *token = NULL;
+	char *root = NULL, *type = NULL;
+	int ret = 0;
+
+	for (token = strtok_r(entries, ";", &saveptr); token;
+	     token = strtok_r(NULL, ";", &saveptr)) {
+		root = strtok(token, "|");
+		type = strtok(NULL, "|");
+		ret = lkl_qdisc_add(ifindex, root, type);
+		if (ret) {
+			fprintf(stderr, "Failed to add qdisc entry: %s\n",
+				lkl_strerror(ret));
+			return;
+		}
+	}
+	return;
+}
+
+/* Configure sysctl parameters as the form of "key|value;key|value;..." */
+static void sysctl_write(char* sysctls)
+{
+	char *saveptr = NULL, *token = NULL;
+	char *key = NULL, *value = NULL;
+	int ret = 0;
+
+	for (token = strtok_r(sysctls, ";", &saveptr); token;
+	     token = strtok_r(NULL, ";", &saveptr)) {
+		key = strtok(token, "|");
+		value = strtok(NULL, "|");
+		ret = lkl_sysctl(key, value);
+		if (ret) {
+			fprintf(stderr,
+				"Failed to configure sysctl entries: %s\n",
+				lkl_strerror(ret));
+			return;
+		}
+	}
+	return;
+}
+
 /* We don't have an easy way to make FILE*s out of our fds, so we
  * can't use e.g. fgets */
 static int dump_file(char *path)
@@ -200,8 +243,11 @@ hijack_init(void)
 	char *gateway6 = getenv("LKL_HIJACK_NET_GATEWAY6");
 	char *debug = getenv("LKL_HIJACK_DEBUG");
 	char *mount = getenv("LKL_HIJACK_MOUNT");
+	char *memsize_str = getenv("LKL_HIJACK_MEMSIZE");
+	unsigned long memsize = 64 * 1024 * 1024UL;
 	struct lkl_netdev_args nd_args;
 	char *neigh_entries = getenv("LKL_HIJACK_NET_NEIGHBOR");
+	char *qdisc_entries = getenv("LKL_HIJACK_NET_QDISC");
 	/* single_cpu mode:
 	 * 0: Don't pin to single CPU (default).
 	 * 1: Pin only LKL kernel threads to single CPU.
@@ -219,6 +265,7 @@ hijack_init(void)
 	char *offload1 = getenv("LKL_HIJACK_OFFLOAD");
 	int offload = 0;
 	char boot_cmdline[256] = "\0";
+	char *sysctls = getenv("LKL_HIJACK_SYSCTL");
 
 	memset(&nd_args, 0, sizeof(struct lkl_netdev_args));
 	if (!debug) {
@@ -328,7 +375,11 @@ hijack_init(void)
 	if ((ip && !strcmp(ip, "dhcp")) && (nd_id != -1))
 		snprintf(boot_cmdline, sizeof(boot_cmdline), "ip=dhcp");
 
-	ret = lkl_start_kernel(&lkl_host_ops, 64 * 1024 * 1024UL, boot_cmdline);
+	/* parse mem size */
+	if (memsize_str)
+		memsize = memparse(memsize_str, NULL);
+
+	ret = lkl_start_kernel(&lkl_host_ops, memsize, boot_cmdline);
 	if (ret) {
 		fprintf(stderr, "can't start kernel: %s\n", lkl_strerror(ret));
 		return;
@@ -429,8 +480,15 @@ hijack_init(void)
 	if (mount)
 		mount_cmds_exec(mount, lkl_mount_fs);
 
+	if (sysctls)
+		sysctl_write(sysctls);
+
 	if (nd_ifindex >=0 && neigh_entries)
 		add_neighbor(nd_ifindex, neigh_entries);
+
+	if (nd_ifindex >=0 && qdisc_entries)
+		add_qdisc(nd_ifindex, qdisc_entries);
+
 }
 
 void __attribute__((destructor))
