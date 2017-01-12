@@ -171,6 +171,7 @@ int test_syscall_latency(char *str, int len)
 }
 
 #define access_rights 0721
+#define LKL_TEST_FDNUM 3
 
 int test_creat(char *str, int len)
 {
@@ -180,7 +181,7 @@ int test_creat(char *str, int len)
 
 	snprintf(str, len, "%ld", ret);
 
-	if (ret == 3)		/* 0/1/2 are already opened */
+	if (ret == LKL_TEST_FDNUM)	/* 0/1/2 are already opened */
 		return TEST_SUCCESS;
 
 	return TEST_FAILURE;
@@ -190,7 +191,7 @@ int test_close(char *str, int len)
 {
 	long ret;
 
-	ret = lkl_sys_close(0);
+	ret = lkl_sys_close(LKL_TEST_FDNUM);
 
 	snprintf(str, len, "%ld", ret);
 
@@ -238,7 +239,7 @@ int test_open(char *str, int len)
 
 	snprintf(str, len, "%ld", ret);
 
-	if (ret == 0)
+	if (ret == LKL_TEST_FDNUM)
 		return TEST_SUCCESS;
 
 	return TEST_FAILURE;
@@ -250,7 +251,7 @@ int test_write(char *str, int len)
 {
 	long ret;
 
-	ret = lkl_sys_write(0, write_test, sizeof(write_test));
+	ret = lkl_sys_write(LKL_TEST_FDNUM, write_test, sizeof(write_test));
 
 	snprintf(str, len, "%ld", ret);
 
@@ -264,7 +265,7 @@ int test_lseek(char *str, int len)
 {
 	long ret;
 
-	ret = lkl_sys_lseek(0, 0, LKL_SEEK_SET);
+	ret = lkl_sys_lseek(LKL_TEST_FDNUM, 0, LKL_SEEK_SET);
 
 	snprintf(str, len, "%zd ", ret);
 
@@ -279,7 +280,7 @@ int test_read(char *str, int len)
 	char buf[10] = { 0, };
 	long ret;
 
-	ret = lkl_sys_read(0, buf, sizeof(buf));
+	ret = lkl_sys_read(LKL_TEST_FDNUM, buf, sizeof(buf));
 
 	snprintf(str, len, "%ld %s", ret, buf);
 
@@ -294,7 +295,7 @@ int test_fstat(char *str, int len)
 	struct lkl_stat stat;
 	long ret;
 
-	ret = lkl_sys_fstat(0, &stat);
+	ret = lkl_sys_fstat(LKL_TEST_FDNUM, &stat);
 
 	snprintf(str, len, "%ld %o %zd", ret, stat.st_mode, stat.st_size);
 
