@@ -243,3 +243,25 @@ int lkl_sysctl(char *path, char *value)
 
 	return 0;
 }
+
+/* Configure sysctl parameters as the form of "key|value;key|value;..." */
+void lkl_sysctl_parse_write(char* sysctls)
+{
+	char *saveptr = NULL, *token = NULL;
+	char *key = NULL, *value = NULL;
+	int ret = 0;
+
+	for (token = strtok_r(sysctls, ";", &saveptr); token;
+	     token = strtok_r(NULL, ";", &saveptr)) {
+		key = strtok(token, "|");
+		value = strtok(NULL, "|");
+		ret = lkl_sysctl(key, value);
+		if (ret) {
+			fprintf(stderr,
+				"Failed to configure sysctl entries: %s\n",
+				lkl_strerror(ret));
+			return;
+		}
+	}
+	return;
+}

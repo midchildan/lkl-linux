@@ -105,49 +105,6 @@ static void add_neighbor(int ifindex, char* entries) {
 	return;
 }
 
-/* Add a qdisc entry for an interface in the form of "root|type;root|type;..." */
-static void add_qdisc(int ifindex, char* entries)
-{
-	char *saveptr = NULL, *token = NULL;
-	char *root = NULL, *type = NULL;
-	int ret = 0;
-
-	for (token = strtok_r(entries, ";", &saveptr); token;
-	     token = strtok_r(NULL, ";", &saveptr)) {
-		root = strtok(token, "|");
-		type = strtok(NULL, "|");
-		ret = lkl_qdisc_add(ifindex, root, type);
-		if (ret) {
-			fprintf(stderr, "Failed to add qdisc entry: %s\n",
-				lkl_strerror(ret));
-			return;
-		}
-	}
-	return;
-}
-
-/* Configure sysctl parameters as the form of "key|value;key|value;..." */
-static void sysctl_write(char* sysctls)
-{
-	char *saveptr = NULL, *token = NULL;
-	char *key = NULL, *value = NULL;
-	int ret = 0;
-
-	for (token = strtok_r(sysctls, ";", &saveptr); token;
-	     token = strtok_r(NULL, ";", &saveptr)) {
-		key = strtok(token, "|");
-		value = strtok(NULL, "|");
-		ret = lkl_sysctl(key, value);
-		if (ret) {
-			fprintf(stderr,
-				"Failed to configure sysctl entries: %s\n",
-				lkl_strerror(ret));
-			return;
-		}
-	}
-	return;
-}
-
 /* We don't have an easy way to make FILE*s out of our fds, so we
  * can't use e.g. fgets */
 static int dump_file(char *path)
@@ -481,13 +438,13 @@ hijack_init(void)
 		mount_cmds_exec(mount, lkl_mount_fs);
 
 	if (sysctls)
-		sysctl_write(sysctls);
+		lkl_sysctl_parse_write(sysctls);
 
 	if (nd_ifindex >=0 && neigh_entries)
 		add_neighbor(nd_ifindex, neigh_entries);
 
 	if (nd_ifindex >=0 && qdisc_entries)
-		add_qdisc(nd_ifindex, qdisc_entries);
+		lkl_qdisc_parse_add(nd_ifindex, qdisc_entries);
 
 }
 

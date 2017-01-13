@@ -465,12 +465,29 @@ int lkl_set_fd_limit(unsigned int fd_limit);
 int lkl_qdisc_add(int ifindex, char *root, char *type);
 
 /**
+ * lkl_qdisc_parse_add - Add a qdisc entry for an interface with strings
+ *
+ * @ifindex - the ifindex of the interface
+ * @entries - strings of qdisc configurations in the form of
+ *            "root|type;root|type;..."
+ */
+void lkl_qdisc_parse_add(int ifindex, char* entries);
+
+/**
  * lkl_sysctl - write a sysctl value
  *
  * @path - the path to an sysctl entry (e.g., "net.ipv4.tcp_wmem");
  * @value - the value of the sysctl (e.g., "4096 87380 2147483647")
  */
 int lkl_sysctl(char *path, char *value);
+
+
+/**
+ * lkl_sysctl_parse_write - Configure sysctl parameters with strings
+ *
+ * @sysctls - Configure sysctl parameters as the form of "key|value;key|value;..."
+ */
+void lkl_sysctl_parse_write(char* sysctls);
 
 #ifdef __cplusplus
 }

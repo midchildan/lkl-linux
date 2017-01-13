@@ -575,3 +575,24 @@ int lkl_qdisc_add(int ifindex, char *root, char *type)
 	return qdisc_add(LKL_RTM_NEWQDISC, LKL_NLM_F_CREATE | LKL_NLM_F_EXCL,
 			 ifindex, root, type);
 }
+
+/* Add a qdisc entry for an interface in the form of "root|type;root|type;..." */
+void lkl_qdisc_parse_add(int ifindex, char* entries)
+{
+	char *saveptr = NULL, *token = NULL;
+	char *root = NULL, *type = NULL;
+	int ret = 0;
+
+	for (token = strtok_r(entries, ";", &saveptr); token;
+	     token = strtok_r(NULL, ";", &saveptr)) {
+		root = strtok(token, "|");
+		type = strtok(NULL, "|");
+		ret = lkl_qdisc_add(ifindex, root, type);
+		if (ret) {
+			fprintf(stderr, "Failed to add qdisc entry: %s\n",
+				lkl_strerror(ret));
+			return;
+		}
+	}
+	return;
+}

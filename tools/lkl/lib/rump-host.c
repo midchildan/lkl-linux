@@ -388,15 +388,15 @@ struct lkl_host_operations lkl_host_ops = {
 #endif
 };
 
-
 /* entry/exit points */
-#define LKL_MEM_SIZE (100 * 1024 * 1024)
 char *boot_cmdline = "";
-static char buf[256];
 static int verbose;
 
 int rump_init(void)
 {
+	char buf[256];
+	unsigned long memsize = 64 * 1024 * 1024UL;
+
 	if (rumpuser_init(RUMPUSER_VERSION, &hyp) != 0) {
 		rumpuser_dprintf("rumpuser init failed\n");
 		return -EINVAL;
@@ -406,7 +406,12 @@ int rump_init(void)
 	rumpuser_cv_init(&thrcv);
 	threads_are_go = false;
 
-	lkl_start_kernel(&lkl_host_ops, LKL_MEM_SIZE, boot_cmdline);
+	if (rumpuser_getparam("LKL_MEMSIZE", buf, sizeof(buf)) == 0) {
+		if (*buf != 0)
+			memsize = rumpns_memparse(buf, NULL);
+	}
+
+	lkl_start_kernel(&lkl_host_ops, memsize, boot_cmdline);
 
 	rump_thread_allow(NULL);
 	/* FIXME: rumprun doesn't have sysproxy.
