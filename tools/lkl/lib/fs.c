@@ -76,6 +76,12 @@ static int get_node_with_prefix(const char *path, const char *prefix,
 	return ret;
 }
 
+/* rumprun doesn't build virtio.o (of lkl) so stub it */
+uint32_t __attribute__((weak)) virtio_get_num_bootdevs(void)
+{
+	return 0;
+}
+
 static int encode_dev_from_sysfs(const char *sysfs_path, uint32_t *pdevid)
 {
 	int ret;
