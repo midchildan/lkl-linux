@@ -5,6 +5,7 @@
 struct lkl_mutex;
 struct lkl_sem;
 struct lkl_tls_key;
+struct irq_data;
 typedef unsigned long lkl_thread_t;
 struct lkl_jmp_buf {
 	unsigned long buf[32];
@@ -122,6 +123,9 @@ struct lkl_host_operations {
 	void* (*ioremap)(long addr, int size);
 	int (*iomem_access)(const volatile void *addr, void *val, int size,
 			    int write);
+
+	int (*irq_request)(struct irq_data *data);
+	void (*irq_release)(struct irq_data *data);
 
 	long (*gettid)(void);
 
