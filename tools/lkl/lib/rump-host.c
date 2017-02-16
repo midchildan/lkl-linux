@@ -220,75 +220,25 @@ static struct rumpuser_cv *thrcv;
 struct thrdesc {
 	void (*f)(void *);
 	void *arg;
-	int canceled;
+	int stopped;
 	void *thrid;
 	struct timespec timeout;
 	struct rumpuser_mtx *mtx;
 	struct rumpuser_cv *cv;
 };
 
-static void *rump_timer_trampoline(void *arg)
-{
-	struct thrdesc *td = arg;
-	void (*f)(void *);
-	void *thrarg;
-	int err;
 
-	/* from src-netbsd/sys/rump/librump/rumpkern/thread.c */
-	/* don't allow threads to run before all CPUs have fully attached */
-	if (!threads_are_go) {
-		rumpuser_mutex_enter_nowrap(thrmtx);
-		while (!threads_are_go)
-			rumpuser_cv_wait_nowrap(thrcv, thrmtx);
-		rumpuser_mutex_exit(thrmtx);
-	}
-
-	f = td->f;
-	thrarg = td->arg;
-	if (td->timeout.tv_sec != 0 || td->timeout.tv_nsec != 0) {
-		rumpuser_mutex_enter(td->mtx);
-		err = rumpuser_cv_timedwait(td->cv, td->mtx,
-					    td->timeout.tv_sec,
-					    td->timeout.tv_nsec);
-		if (td->canceled) {
-			if (!td->thrid)
-				rumpuser_free(td, 0);
-			goto end;
-		}
-		rumpuser_mutex_exit(td->mtx);
-		/* FIXME: we should not use rumpuser__errtrans here
-		 * 60==ETIMEDOUT(netbsd), rumpuser__errtrans(ETIMEDOUT))
-		 */
-		if (err && err != 60)
-			goto end;
-	}
-
-	f(thrarg);
-
-	rumpuser_thread_exit();
-end:
-	return arg;
-}
-
-static void rump_timer_cancel(void *timer)
+static void rump_timer_stop(void *timer)
 {
 	struct thrdesc *td = timer;
 
-	if (td->canceled)
+	if (td->stopped)
 		return;
 
-	td->canceled = 1;
+	td->stopped = 1;
 	rumpuser_mutex_enter(td->mtx);
 	rumpuser_cv_signal(td->cv);
 	rumpuser_mutex_exit(td->mtx);
-
-	rumpuser_mutex_destroy(td->mtx);
-	rumpuser_cv_destroy(td->cv);
-
-	if (td->thrid)
-		rumpuser_thread_join(td->thrid);
-
-	rumpuser_free(td, 0);
 }
 
 /* from src-netbsd/sys/rump/librump/rumpkern/thread.c */
@@ -312,9 +262,67 @@ static unsigned long long time_ns(void)
 	return ((unsigned long long) ts.tv_sec * NSEC_PER_SEC) + ts.tv_nsec;
 }
 
+static void *rump_timer_trampoline(void *arg)
+{
+	struct thrdesc *td = arg;
+
+	td->f(td->arg);
+	rumpuser_thread_exit();
+	return NULL;
+}
+
+static void *rump_timer_helper(void *arg)
+{
+	struct thrdesc *td = arg, td2;
+	int err;
+
+	/* notify the bootstrap done */
+	rump_thread_allow(NULL);
+
+	while (!td->stopped) {
+		/* wait for an event */
+		rumpuser_mutex_enter(td->mtx);
+		rumpuser_cv_wait(td->cv, td->mtx);
+		rumpuser_mutex_exit(td->mtx);
+
+		if (td->stopped)
+			break;
+
+restart:
+		/* wait for specified timing */
+		rumpuser_mutex_enter(td->mtx);
+		err = rumpuser_cv_timedwait(td->cv, td->mtx,
+					    td->timeout.tv_sec,
+					    td->timeout.tv_nsec);
+		rumpuser_mutex_exit(td->mtx);
+		/* FIXME: we should not use rumpuser__errtrans here
+		 * 60==ETIMEDOUT(netbsd), rumpuser__errtrans(ETIMEDOUT))
+		 */
+		if (err && err != 60) {
+			rumpuser_dprintf("timedwait return w/o timedout (%d)\n",
+					 err);
+			goto restart;
+		}
+
+		td2.f = td->f;
+		td2.arg = td->arg;
+		err = rumpuser_thread_create(rump_timer_trampoline, &td2,
+					     "timer",
+					     0, 0, -1, &td2.thrid);
+	}
+
+	/* end of timer helper */
+	rumpuser_mutex_destroy(td->mtx);
+	rumpuser_cv_destroy(td->cv);
+	rumpuser_free(td, 0);
+
+	return NULL;
+}
+
 static void *timer_alloc(void (*fn)(void *), void *arg)
 {
 	struct thrdesc *td;
+	int ret;
 
 	rumpuser_malloc(sizeof(*td), 0, (void **)&td);
 
@@ -325,25 +333,42 @@ static void *timer_alloc(void (*fn)(void *), void *arg)
 	rumpuser_mutex_init(&td->mtx, RUMPUSER_MTX_SPIN);
 	rumpuser_cv_init(&td->cv);
 
-	return td;
+	ret = rumpuser_thread_create(rump_timer_helper, td, "timer_helper",
+				     1, 0, -1, &td->thrid);
+
+	/* from src-netbsd/sys/rump/librump/rumpkern/thread.c */
+	/* don't allow threads to run before all CPUs have fully attached */
+	if (!threads_are_go) {
+		rumpuser_mutex_enter_nowrap(thrmtx);
+		while (!threads_are_go)
+			rumpuser_cv_wait_nowrap(thrcv, thrmtx);
+		rumpuser_mutex_exit(thrmtx);
+	}
+
+	return ret ? -1 : td;
 }
 
 static int timer_set_oneshot(void *_timer, unsigned long ns)
 {
-	int ret;
 	struct thrdesc *td = _timer;
 
+	/* This should override the current issued timer (but not fired)
+	 * so that do like POSIX timer_settime(2).
+	 */
 	td->timeout = (struct timespec){ .tv_sec = ns / NSEC_PER_SEC,
 					 .tv_nsec = ns % NSEC_PER_SEC};
-	ret = rumpuser_thread_create(rump_timer_trampoline, td, "timer",
-				     0, 0, -1, &td->thrid);
 
-	return ret ? -1 : 0;
+	/* notify the helper */
+	rumpuser_mutex_enter(td->mtx);
+	rumpuser_cv_signal(td->cv);
+	rumpuser_mutex_exit(td->mtx);
+
+	return 0;
 }
 
 static void timer_free(void *_timer)
 {
-	rump_timer_cancel(_timer);
+	rump_timer_stop(_timer);
 }
 
 static void panic(void)
@@ -415,7 +440,6 @@ int rump_init(void)
 
 	lkl_start_kernel(&lkl_host_ops, boot_cmdline);
 
-	rump_thread_allow(NULL);
 	/* FIXME: rumprun doesn't have sysproxy.
 	 * maybe outsourced and linked -lsysproxy for hijack case ?
 	 */
