@@ -16,7 +16,6 @@
 #include <poll.h>
 #include <sys/uio.h>
 #include <sys/mman.h>
-#include <thread.h>
 
 #include <lkl_host.h>
 #include "iomem.h"
@@ -185,7 +184,7 @@ static lkl_thread_t rump_thread_create(void (*fn)(void *), void *arg)
 	int ret;
 
 	ret = rumpuser_thread_create((void * (*)(void *))fn, arg,
-				     "lkl_thr", 1, 1, -1, &thrid);
+				     "lkl_thr", 1, 1, -1, &thrid, NULL, 0);
 	if (ret)
 		return 0;
 
@@ -312,10 +311,9 @@ restart:
 		td2.f = td->f;
 		td2.arg = td->arg;
 		/* use reused stack to avoid mmap(2) in create_thread */
-		td2.thrid =
-			create_thread("timer", NULL,
-				      (void (*)(void *))rump_timer_trampoline,
-				      &td2, stack, STACKSIZE, 0);
+		err = rumpuser_thread_create(rump_timer_trampoline, &td2,
+					     "timer", 0, 0, -1, &td2.thrid,
+					     stack, STACKSIZE);
 	}
 
 	/* end of timer helper */
@@ -341,7 +339,7 @@ static void *timer_alloc(void (*fn)(void *), void *arg)
 	rumpuser_cv_init(&td->cv);
 
 	ret = rumpuser_thread_create(rump_timer_helper, td, "timer_helper",
-				     1, 0, -1, &td->thrid);
+				     1, 0, -1, &td->thrid, NULL, 0);
 
 	/* from src-netbsd/sys/rump/librump/rumpkern/thread.c */
 	/* don't allow threads to run before all CPUs have fully attached */

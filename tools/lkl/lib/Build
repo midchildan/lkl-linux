@@ -26,6 +26,4 @@ lkl-$(CONFIG_AUTO_LKL_VIRTIO_NET_VDE) += virtio_net_vde.o
 # for frankenlibc
 CFLAGS_rump-host.o = -I$(RUMP_PREFIX)/../platform/include \
 		   -I$(RUMP_PREFIX)/../franken/include \
-		   -I$(RUMP_PREFIX)/../franken/thread \
-		   -I$(RUMP_PREFIX)/../franken/ucontext \
 		   -DCONFIG_AUTO_LKL_POSIX_HOST -DCONFIG_LKL
