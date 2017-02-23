@@ -5,8 +5,12 @@
  * Author: Hajime Tazaki <thehajime@gmail.com>
  */
 
+#ifndef __dead
 #define __dead
+#endif
+#ifndef __printflike
 #define __printflike(x, y)
+#endif
 #include <rump/rumpuser.h>
 
 struct irq_data;

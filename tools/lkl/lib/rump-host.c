@@ -15,6 +15,8 @@
 #include <unistd.h>
 #include <poll.h>
 #include <sys/uio.h>
+#include <sys/mman.h>
+#include <thread.h>
 
 #include <lkl_host.h>
 #include "iomem.h"
@@ -33,6 +35,9 @@ int *__errno(void);
 #undef errno
 #define errno (*__errno())
 
+/* for timer thread */
+static void *stack;
+#define STACKSIZE 65535
 
 /* console */
 static void rump_print(const char *str, int len)
@@ -306,9 +311,11 @@ restart:
 
 		td2.f = td->f;
 		td2.arg = td->arg;
-		err = rumpuser_thread_create(rump_timer_trampoline, &td2,
-					     "timer",
-					     0, 0, -1, &td2.thrid);
+		/* use reused stack to avoid mmap(2) in create_thread */
+		td2.thrid =
+			create_thread("timer", NULL,
+				      (void (*)(void *))rump_timer_trampoline,
+				      &td2, stack, STACKSIZE, 0);
 	}
 
 	/* end of timer helper */
@@ -345,7 +352,7 @@ static void *timer_alloc(void (*fn)(void *), void *arg)
 		rumpuser_mutex_exit(thrmtx);
 	}
 
-	return ret ? -1 : td;
+	return ret ? NULL : td;
 }
 
 static int timer_set_oneshot(void *_timer, unsigned long ns)
@@ -437,6 +444,14 @@ int rump_init(void)
 	else
 		boot_cmdline = "mem=100M";
 
+	if (!stack) {
+		stack = mmap(NULL, STACKSIZE, PROT_READ | PROT_WRITE,
+			     MAP_SHARED | MAP_ANON | MAP_STACK, -1, 0);
+		if (stack == MAP_FAILED) {
+			rumpuser_dprintf("mmap failiure\n");
+			return -EINVAL;
+		}
+	}
 
 	lkl_start_kernel(&lkl_host_ops, boot_cmdline);
 
@@ -460,6 +475,9 @@ void rump_exit(void)
 {
 	if (verbose)
 		rumpuser_dprintf("rumpuser finishing.\n");
+
+	if (stack)
+		munmap(stack, STACKSIZE);
 
 #ifdef ENABLE_SYSPROXY
 	rump_sysproxy_fini();
