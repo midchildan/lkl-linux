@@ -457,7 +457,7 @@ int rump_init(void)
 	if (rumpuser_getparam("LKL_BOOT_CMDLINE", buf, sizeof(buf)) == 0)
 		boot_cmdline = buf;
 	else
-		boot_cmdline = "mem=100M";
+		boot_cmdline = "mem=100M virtio-pci.force_legacy=1";
 
 	if (!stack) {
 		stack = rump_mem_alloc(STACKSIZE);
