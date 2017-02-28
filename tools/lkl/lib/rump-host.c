@@ -15,14 +15,9 @@
 #include <unistd.h>
 #include <poll.h>
 #include <sys/uio.h>
-
 #ifndef RUMPRUN
 #include <thread.h>
 #endif
-
-#undef container_of
-#undef LIST_HEAD
-#include <scripts/kconfig/list.h>
 
 #include <lkl_host.h>
 #include "iomem.h"
@@ -33,6 +28,8 @@
 /* FIXME */
 #define BIT(x) (1ULL << x)
 #define NSEC_PER_SEC	1000000000L
+#define container_of(ptr, type, member) \
+	(type *)((char *)(ptr) - __builtin_offsetof(type, member))
 
 /* FIXME */
 int *__errno(void);
@@ -45,6 +42,10 @@ struct bmk_thread *bmk_sched_create(const char *, void *, int,
 				    void (*)(void *), void *,
 				    void *, unsigned long);
 #endif
+
+/* for timer thread */
+static void *stack;
+#define STACKSIZE 65535
 
 /* console */
 static void rump_print(const char *str, int len)
@@ -229,10 +230,7 @@ static bool threads_are_go;
 static struct rumpuser_mtx *thrmtx;
 static struct rumpuser_cv *thrcv;
 
-static LIST_HEAD(pending_timer);
-
 struct thrdesc {
-	struct list_head list;
 	void (*f)(void *);
 	void *arg;
 	int stopped;
@@ -280,35 +278,16 @@ static unsigned long long time_ns(void)
 static void *rump_timer_trampoline(void *arg)
 {
 	struct thrdesc *td = arg;
-	int err;
-
-	/* wait for specified timing */
-	rumpuser_mutex_enter(td->mtx);
-	err = rumpuser_cv_timedwait(td->cv, td->mtx,
-				    td->timeout.tv_sec,
-				    td->timeout.tv_nsec);
-	rumpuser_mutex_exit(td->mtx);
-	/* FIXME: we should not use rumpuser__errtrans here
-	 * 60==ETIMEDOUT(netbsd), rumpuser__errtrans(ETIMEDOUT))
-	 */
-	if (err && err != 60) {
-		rumpuser_dprintf("timedwait return w/o timedout (%d)\n",
-				 err);
-		return NULL;
-	}
 
 	td->f(td->arg);
-
-	rumpuser_mutex_destroy(td->mtx);
-	rumpuser_cv_destroy(td->cv);
-	rumpuser_free(td, 0);
 	rumpuser_thread_exit();
 	return NULL;
 }
 
 static void *rump_timer_helper(void *arg)
 {
-	struct thrdesc *td = arg, *td2, *tmp;
+	struct thrdesc *td = arg, td2;
+	int err;
 
 	/* notify the bootstrap done */
 	rump_thread_allow(NULL);
@@ -322,26 +301,36 @@ static void *rump_timer_helper(void *arg)
 		if (td->stopped)
 			break;
 
-		list_for_each_entry_safe(td2, tmp, &pending_timer, list) {
-#ifdef RUMPRUN
-			td2->thrid = bmk_sched_create(
-				"timer", NULL, 0,
-				(void (*)(void *))rump_timer_trampoline,
-				td2, NULL, 0);
-#else
-			/* XXX: not in use
-			 * reused stack will avoid mmap(2) in create_thread
-			 * and reduce context switch, but can't do now coz
-			 * multiple timer.  stack pool ?
-			 */
-			td2->thrid =
-				create_thread("timer", NULL,
-					      (void (*)(void *))
-					      rump_timer_trampoline,
-					      td2, NULL, 0, 0);
-#endif
-			list_del(&td2->list);
+restart:
+		/* wait for specified timing */
+		rumpuser_mutex_enter(td->mtx);
+		err = rumpuser_cv_timedwait(td->cv, td->mtx,
+					    td->timeout.tv_sec,
+					    td->timeout.tv_nsec);
+		rumpuser_mutex_exit(td->mtx);
+		/* FIXME: we should not use rumpuser__errtrans here
+		 * 60==ETIMEDOUT(netbsd), rumpuser__errtrans(ETIMEDOUT))
+		 */
+		if (err && err != 60) {
+			rumpuser_dprintf("timedwait return w/o timedout (%d)\n",
+					 err);
+			goto restart;
 		}
+
+		td2.f = td->f;
+		td2.arg = td->arg;
+		/* use reused stack to avoid mmap(2) in create_thread */
+#ifdef RUMPRUN
+		td2.thrid = bmk_sched_create(
+			"timer", NULL, 0,
+			(void (*)(void *))rump_timer_trampoline,
+			&td2, stack, STACKSIZE);
+#else
+		td2.thrid =
+			create_thread("timer", NULL,
+				      (void (*)(void *))rump_timer_trampoline,
+				      &td2, stack, STACKSIZE, 0);
+#endif
 	}
 
 	/* end of timer helper */
@@ -383,12 +372,7 @@ static void *timer_alloc(void (*fn)(void *), void *arg)
 
 static int timer_set_oneshot(void *_timer, unsigned long ns)
 {
-	struct thrdesc *td, *master = _timer;
-
-	rumpuser_malloc(sizeof(*td), 0, (void **)&td);
-	memcpy(td, _timer, sizeof(*td));
-	rumpuser_mutex_init(&td->mtx, RUMPUSER_MTX_SPIN);
-	rumpuser_cv_init(&td->cv);
+	struct thrdesc *td = _timer;
 
 	/* This should override the current issued timer (but not fired)
 	 * so that do like POSIX timer_settime(2).
@@ -397,11 +381,9 @@ static int timer_set_oneshot(void *_timer, unsigned long ns)
 					 .tv_nsec = ns % NSEC_PER_SEC};
 
 	/* notify the helper */
-	list_add_tail(&td->list, &pending_timer);
-
-	rumpuser_mutex_enter(master->mtx);
-	rumpuser_cv_signal(master->cv);
-	rumpuser_mutex_exit(master->mtx);
+	rumpuser_mutex_enter(td->mtx);
+	rumpuser_cv_signal(td->cv);
+	rumpuser_mutex_exit(td->mtx);
 
 	return 0;
 }
@@ -477,6 +459,14 @@ int rump_init(void)
 	else
 		boot_cmdline = "mem=100M virtio-pci.force_legacy=1";
 
+	if (!stack) {
+		stack = rump_mem_alloc(STACKSIZE);
+		if (!stack) {
+			rumpuser_dprintf("rump_mem_alloc failiure\n");
+			return -EINVAL;
+		}
+	}
+
 	lkl_start_kernel(&lkl_host_ops, boot_cmdline);
 
 	/* FIXME: rumprun doesn't have sysproxy.
@@ -499,6 +489,9 @@ void rump_exit(void)
 {
 	if (verbose)
 		rumpuser_dprintf("rumpuser finishing.\n");
+
+	if (stack)
+		rump_mem_free(stack);
 
 #ifdef ENABLE_SYSPROXY
 	rump_sysproxy_fini();

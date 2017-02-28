@@ -28,5 +28,4 @@ CFLAGS_rump-host.o = -I$(RUMP_PREFIX)/../platform/include \
 		   -I$(RUMP_PREFIX)/../franken/include \
 		   -I$(RUMP_PREFIX)/../franken/thread \
 		   -I$(RUMP_PREFIX)/../franken/ucontext \
-		   -I../../ \
 		   -DCONFIG_AUTO_LKL_POSIX_HOST -DCONFIG_LKL
