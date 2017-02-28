@@ -498,6 +498,12 @@ int lkl_sysctl(const char *path, const char *value);
  */
 void lkl_sysctl_parse_write(const char *sysctls);
 
+/**
+ * lkl_parse_env - parse all environmental variables
+ *
+ */
+void lkl_parse_env(void);
+
 #ifdef __cplusplus
 }
 #endif
