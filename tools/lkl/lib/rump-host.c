@@ -15,9 +15,14 @@
 #include <unistd.h>
 #include <poll.h>
 #include <sys/uio.h>
+
 #ifndef RUMPRUN
 #include <thread.h>
 #endif
+
+#undef container_of
+#undef LIST_HEAD
+#include <scripts/kconfig/list.h>
 
 #include <lkl_host.h>
 #include "iomem.h"
@@ -28,8 +33,6 @@
 /* FIXME */
 #define BIT(x) (1ULL << x)
 #define NSEC_PER_SEC	1000000000L
-#define container_of(ptr, type, member) \
-	(type *)((char *)(ptr) - __builtin_offsetof(type, member))
 
 /* FIXME */
 int *__errno(void);
@@ -231,6 +234,7 @@ static struct rumpuser_mtx *thrmtx;
 static struct rumpuser_cv *thrcv;
 
 struct thrdesc {
+	struct list_head list;
 	void (*f)(void *);
 	void *arg;
 	int stopped;
@@ -275,6 +279,84 @@ static unsigned long long time_ns(void)
 	return ((unsigned long long) ts.tv_sec * NSEC_PER_SEC) + ts.tv_nsec;
 }
 
+#ifdef RUMPRUN			/* rumprun */
+static LIST_HEAD(pending_timer);
+
+static void *rump_timer_trampoline(void *arg)
+{
+	struct thrdesc *td = arg;
+	int err;
+
+	/* wait for specified timing */
+	rumpuser_mutex_enter(td->mtx);
+	err = rumpuser_cv_timedwait(td->cv, td->mtx,
+				    td->timeout.tv_sec,
+				    td->timeout.tv_nsec);
+	rumpuser_mutex_exit(td->mtx);
+	/* FIXME: we should not use rumpuser__errtrans here
+	 * 60==ETIMEDOUT(netbsd), rumpuser__errtrans(ETIMEDOUT))
+	 */
+	if (err && err != 60) {
+		rumpuser_dprintf("timedwait return w/o timedout (%d)\n",
+				 err);
+		return NULL;
+	}
+
+	td->f(td->arg);
+
+	rumpuser_mutex_destroy(td->mtx);
+	rumpuser_cv_destroy(td->cv);
+	rumpuser_free(td, 0);
+	rumpuser_thread_exit();
+	return NULL;
+}
+
+static void *rump_timer_helper(void *arg)
+{
+	struct thrdesc *td = arg, *td2, *tmp;
+
+	/* notify the bootstrap done */
+	rump_thread_allow(NULL);
+
+	while (!td->stopped) {
+		/* wait for an event */
+		rumpuser_mutex_enter(td->mtx);
+		rumpuser_cv_wait(td->cv, td->mtx);
+		rumpuser_mutex_exit(td->mtx);
+
+		if (td->stopped)
+			break;
+
+		list_for_each_entry_safe(td2, tmp, &pending_timer, list) {
+#ifdef RUMPRUN
+			td2->thrid = bmk_sched_create(
+				"timer", NULL, 0,
+				(void (*)(void *))rump_timer_trampoline,
+				td2, NULL, 0);
+#else
+			/* XXX: not in use
+			 * reused stack will avoid mmap(2) in create_thread
+			 * and reduce context switch, but can't do now coz
+			 * multiple timer.  stack pool ?
+			 */
+			td2->thrid =
+				create_thread("timer", NULL,
+					      (void (*)(void *))
+					      rump_timer_trampoline,
+					      td2, NULL, 0, 0);
+#endif
+			list_del(&td2->list);
+		}
+	}
+
+	/* end of timer helper */
+	rumpuser_mutex_destroy(td->mtx);
+	rumpuser_cv_destroy(td->cv);
+	rumpuser_free(td, 0);
+
+	return NULL;
+}
+#else				/* frankenlibc */
 static void *rump_timer_trampoline(void *arg)
 {
 	struct thrdesc *td = arg;
@@ -340,6 +422,7 @@ restart:
 
 	return NULL;
 }
+#endif
 
 static void *timer_alloc(void (*fn)(void *), void *arg)
 {
@@ -370,6 +453,32 @@ static void *timer_alloc(void (*fn)(void *), void *arg)
 	return ret ? NULL : td;
 }
 
+#ifdef RUMPRUN			/* rumprun */
+static int timer_set_oneshot(void *_timer, unsigned long ns)
+{
+	struct thrdesc *td, *master = _timer;
+
+	rumpuser_malloc(sizeof(*td), 0, (void **)&td);
+	memcpy(td, _timer, sizeof(*td));
+	rumpuser_mutex_init(&td->mtx, RUMPUSER_MTX_SPIN);
+	rumpuser_cv_init(&td->cv);
+
+	/* This should override the current issued timer (but not fired)
+	 * so that do like POSIX timer_settime(2).
+	 */
+	td->timeout = (struct timespec){ .tv_sec = ns / NSEC_PER_SEC,
+					 .tv_nsec = ns % NSEC_PER_SEC};
+
+	/* notify the helper */
+	list_add_tail(&td->list, &pending_timer);
+
+	rumpuser_mutex_enter(master->mtx);
+	rumpuser_cv_signal(master->cv);
+	rumpuser_mutex_exit(master->mtx);
+
+	return 0;
+}
+#else  /* frankenlibc */
 static int timer_set_oneshot(void *_timer, unsigned long ns)
 {
 	struct thrdesc *td = _timer;
@@ -387,6 +496,7 @@ static int timer_set_oneshot(void *_timer, unsigned long ns)
 
 	return 0;
 }
+#endif
 
 static void timer_free(void *_timer)
 {
