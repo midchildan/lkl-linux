@@ -5,12 +5,15 @@
  * Author: Hajime Tazaki <thehajime@gmail.com>
  */
 
+#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <stdlib.h>
+#include "endian.h"
 
 #include <unistd.h>
 #include <poll.h>
@@ -619,6 +622,92 @@ enum rump_etfs_type {
 	RUMP_ETFS_DIR,
 	RUMP_ETFS_DIR_SUBDIRS
 };
+
+int
+rump_pub_netconfig_dhcp_ipv4_oneshot(const char *arg1)
+{
+	/* not supported */
+	return -EOPNOTSUPP;
+}
+
+int
+rump_pub_netconfig_ipv4_ifaddr_cidr(const char *ifname, const char *addr,
+				    int mask)
+{
+	int rv, ifindex;
+	unsigned int v4, d1, d2, d3, d4;
+
+	/* XXX: ifname should be like "eth%d", where ifindex will be
+	 * started from 2.
+	 */
+	ifindex = strtoul(ifname + 3, NULL, 10) + 2;
+
+	lkl_if_up(ifindex);
+
+	rv = sscanf(addr, "%u.%u.%u.%u", &d1, &d2, &d3, &d4);
+	if (rv != 4) {
+		lkl_printf("addr \"%s\" invalid format\n", addr);
+		return -1;
+	}
+
+	v4 = htonl((d1 << 24) + (d2 << 16) + (d3 << 8) + d4);
+
+	rv = lkl_if_set_ipv4(ifindex, v4, mask);
+	if (rv < 0)
+		lkl_printf("ifconfig \"%s\" for \"%s/%d\" failed\n",
+			   ifname, addr, mask);
+
+	return rv;
+}
+
+int
+rump_pub_netconfig_ipv4_gw(const char *gw)
+{
+	int rv;
+	unsigned int v4, d1, d2, d3, d4;
+
+	rv = sscanf(gw, "%u.%u.%u.%u", &d1, &d2, &d3, &d4);
+	if (rv != 4) {
+		lkl_printf("gw \"%s\" invalid format\n", gw);
+		return -1;
+	}
+
+	v4 = htonl((d1 << 24) + (d2 << 16) + (d3 << 8) + d4);
+
+	rv = lkl_set_ipv4_gateway(v4);
+	if (rv != 0)
+		lkl_printf("gw \"%s\" addition failed\n", gw);
+
+	return rv;
+}
+
+int
+rump_pub_netconfig_auto_ipv6(const char *arg1)
+{
+	/* not supported */
+	return -EOPNOTSUPP;
+}
+
+int
+rump_pub_netconfig_ipv6_ifaddr(const char *arg1, const char *arg2, int arg3)
+{
+	/* not supported */
+	return -EOPNOTSUPP;
+}
+
+int
+rump_pub_netconfig_ipv6_gw(const char *arg1)
+{
+	/* not supported */
+	return -EOPNOTSUPP;
+}
+
+int
+rump_pub_netconfig_ifcreate(const char *arg1)
+{
+	/* not supported */
+	return -EOPNOTSUPP;
+}
 
 void rump_boot_setsigmodel(int rump_sigmodel)
 {
