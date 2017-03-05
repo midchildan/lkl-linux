@@ -713,6 +713,20 @@ void rump_boot_setsigmodel(int rump_sigmodel)
 {
 }
 
+int rump_sys_mount(const char *fstype, const char *path, int perm,
+		   void *dum1, size_t dum2)
+{
+	int ret;
+
+	ret = lkl_sys_mkdir(path, 0xff);
+	if (ret && ret != -LKL_EEXIST)
+		lkl_printf("mount_fs mkdir (rv=%d)\n", ret);
+
+	ret = lkl_sys_mount(NULL, (char *)path, (char *)fstype, 0, NULL);
+
+	return ret;
+}
+
 int rump_pub_etfs_register(const char *key, const char *hostpath,
 			   enum rump_etfs_type ftype)
 {
