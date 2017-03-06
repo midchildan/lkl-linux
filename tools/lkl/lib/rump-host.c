@@ -157,6 +157,7 @@ static void rump_mutex_free(struct lkl_mutex *_mutex)
 struct lkl_tls_key {
 	unsigned int *key;
 };
+#ifdef RUMP_TLS_SUPPORT
 static struct lkl_tls_key *rump_tls_alloc(void (*destructor)(void *))
 {
 	return NULL;
@@ -165,6 +166,7 @@ static struct lkl_tls_key *rump_tls_alloc(void (*destructor)(void *))
 static void rump_tls_free(struct lkl_tls_key *key)
 {
 }
+#endif /* RUMP_TLS_SUPPORT */
 
 static int rump_tls_set(struct lkl_tls_key *key, void *data)
 {
@@ -527,8 +529,10 @@ struct lkl_host_operations lkl_host_ops = {
 	.mutex_free = rump_mutex_free,
 	.mutex_lock = rump_mutex_lock,
 	.mutex_unlock = rump_mutex_unlock,
+#ifdef RUMP_TLS_SUPPORT
 	.tls_alloc = rump_tls_alloc,
 	.tls_free = rump_tls_free,
+#endif
 	.tls_set = rump_tls_set,
 	.tls_get = rump_tls_get,
 	.time = time_ns,
