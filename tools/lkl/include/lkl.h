@@ -188,6 +188,12 @@ long lkl_umount_dev(unsigned int disk_id, unsigned int part, int flags,
 long lkl_umount_timeout(char *path, int flags, long timeout_ms);
 
 /**
+ * lkl_umount_all - umount all filesystems
+ *
+ */
+void lkl_umount_all(void);
+
+/**
  * lkl_opendir - open a directory
  *
  * @path - directory path

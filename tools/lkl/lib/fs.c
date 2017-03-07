@@ -311,6 +311,58 @@ long lkl_umount_dev(unsigned int disk_id, unsigned int part, int flags,
 	return lkl_sys_rmdir(mnt_str);
 }
 
+#define PROC_MOUNT_PATH "/proc/mounts"
+void lkl_umount_all(void)
+{
+	int ret;
+	long fd;
+	char dummy[16], mount_point[64], buf[256], *next;
+
+	lkl_mount_fs("proc");
+	fd = lkl_sys_open(PROC_MOUNT_PATH, LKL_O_RDONLY, 0);
+	if (fd < 0)
+		return;
+
+	ret = lkl_sys_read(fd, buf, sizeof(buf));
+	if (ret < 0)
+		goto out_close;
+
+	if (ret == sizeof(buf)) {
+		ret = -LKL_ENOBUFS;
+		goto out_close;
+	}
+
+	next = buf;
+	while (1) {
+		ret = sscanf(next, "%s %s %s %s %s %s\n", dummy, mount_point,
+			     dummy, dummy, dummy, dummy);
+		if (ret != 6)
+			goto out_close;
+
+		next = strchr(next, '\n') + 1;
+
+		/* skip rootfs */
+		if (strcmp(mount_point, "/") == 0 ||
+		    strcmp(mount_point, "/proc") == 0)
+			continue;
+
+		lkl_printf("umounting %s...\n", mount_point);
+		ret = lkl_umount_timeout(mount_point, 0, 1000);
+		if (ret) {
+			lkl_printf("umount error (%s, %d)\n", mount_point, ret);
+			goto out_close;
+		}
+
+	}
+
+out_close:
+	lkl_sys_close(fd);
+	lkl_umount_timeout("/proc", 0, 1000);
+	lkl_umount_timeout("/", 0, 1000);
+	lkl_printf("umount all done\n");
+}
+
+
 struct lkl_dir {
 	int fd;
 	char buf[1024];

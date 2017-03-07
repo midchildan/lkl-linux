@@ -733,7 +733,12 @@ int rump_sys_mount(const char *fstype, const char *path, int perm,
 
 int rump___sysimpl_reboot(int opt, char *bootstr)
 {
-	return lkl_sys_halt();
+
+	lkl_umount_all();
+	lkl_sys_halt();
+
+	/* XXX: should not reach, but... */
+	return 0;
 }
 
 int rump_pub_etfs_register(const char *key, const char *hostpath,
