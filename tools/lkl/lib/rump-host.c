@@ -554,68 +554,6 @@ struct lkl_host_operations lkl_host_ops = {
 #endif
 };
 
-
-/* entry/exit points */
-char *boot_cmdline;
-static char buf[256];
-static int verbose;
-
-int rump_init(void)
-{
-	if (rumpuser_init(RUMPUSER_VERSION, &hyp) != 0) {
-		rumpuser_dprintf("rumpuser init failed\n");
-		return -EINVAL;
-	}
-
-	rumpuser_mutex_init(&thrmtx, RUMPUSER_MTX_SPIN);
-	rumpuser_cv_init(&thrcv);
-	threads_are_go = false;
-
-	if (rumpuser_getparam("LKL_BOOT_CMDLINE", buf, sizeof(buf)) == 0)
-		boot_cmdline = buf;
-	else
-		boot_cmdline = "mem=100M virtio-pci.force_legacy=1";
-
-	if (!stack) {
-		stack = rump_mem_alloc(STACKSIZE);
-		if (!stack) {
-			rumpuser_dprintf("rump_mem_alloc failiure\n");
-			return -EINVAL;
-		}
-	}
-
-	lkl_start_kernel(&lkl_host_ops, boot_cmdline);
-
-	/* FIXME: rumprun doesn't have sysproxy.
-	 * maybe outsourced and linked -lsysproxy for hijack case ?
-	 */
-#ifdef ENABLE_SYSPROXY
-	rump_sysproxy_init();
-#endif
-	if (rumpuser_getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
-		if (*buf != 0)
-			verbose = 1;
-	}
-
-	if (verbose)
-		rumpuser_dprintf("rumpuser started.\n");
-	return 0;
-}
-
-void rump_exit(void)
-{
-	if (verbose)
-		rumpuser_dprintf("rumpuser finishing.\n");
-
-	if (stack)
-		rump_mem_free(stack);
-
-#ifdef ENABLE_SYSPROXY
-	rump_sysproxy_fini();
-#endif
-	rumpuser_exit(0);
-}
-
 /* stub calls */
 #define RUMP_TEMP_STUB
 #ifdef RUMP_TEMP_STUB
@@ -717,20 +655,6 @@ void rump_boot_setsigmodel(int rump_sigmodel)
 {
 }
 
-int rump_sys_mount(const char *fstype, const char *path, int perm,
-		   void *dum1, size_t dum2)
-{
-	int ret;
-
-	ret = lkl_sys_mkdir(path, 0xff);
-	if (ret && ret != -LKL_EEXIST)
-		lkl_printf("mount_fs mkdir (rv=%d)\n", ret);
-
-	ret = lkl_sys_mount(NULL, (char *)path, (char *)fstype, 0, NULL);
-
-	return ret;
-}
-
 int rump___sysimpl_reboot(int opt, char *bootstr)
 {
 
@@ -744,6 +668,7 @@ int rump___sysimpl_reboot(int opt, char *bootstr)
 int rump_pub_etfs_register(const char *key, const char *hostpath,
 			   enum rump_etfs_type ftype)
 {
+	panic();
 	return 0;
 }
 
@@ -751,52 +676,69 @@ int rump_pub_etfs_register_withsize(const char *key, const char *hostpath,
 				    enum rump_etfs_type ftype, uint64_t begin,
 				    uint64_t size)
 {
+	panic();
 	return 0;
 }
 
-int rump___sysimpl_mount50(const char *str, const char *str2, int i,
-			   void *p, size_t s)
+int rump___sysimpl_mount50(const char *fstype, const char *path, int perm,
+			   void *dum1, size_t dum2)
 {
-	return 0;
+	int ret;
+
+	ret = lkl_sys_mkdir(path, 0xff);
+	if (ret && ret != -LKL_EEXIST)
+		lkl_printf("mount_fs mkdir (rv=%d)\n", ret);
+
+	ret = lkl_sys_mount(NULL, (char *)path, (char *)fstype, 0, NULL);
+
+	return ret;
 }
 
 int rump___sysimpl_dup2(int i, int j)
 {
+	panic();
 	return 0;
 }
 
 int rump___sysimpl_socket30(int i, int j, int k)
 {
+	panic();
 	return 0;
 }
 
 int rump___sysimpl_unmount(const char *str, int i)
 {
+	panic();
 	return 0;
 }
 
 void __assert13(const char *file, int line, const char *function,
 		const char *failedexpr)
 {
+	panic();
 }
 
 int rump___sysimpl_close(int fd)
 {
+	panic();
 	return -1;
 }
 
 int rump___sysimpl_ioctl(int fd, u_long com, void *data)
 {
+	panic();
 	return -1;
 }
 
 int rump___sysimpl_mkdir(const char *path, mode_t mode)
 {
+	panic();
 	return -1;
 }
 
 int rump___sysimpl_open(const char *name, int flags, ...)
 {
+	panic();
 	return -1;
 }
 
@@ -953,3 +895,64 @@ struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd,
 	return (struct lkl_netdev *)nd;
 }
 #endif
+
+/* entry/exit points */
+char *boot_cmdline;
+static char buf[256];
+static int verbose;
+
+int rump_init(void)
+{
+	if (rumpuser_init(RUMPUSER_VERSION, &hyp) != 0) {
+		rumpuser_dprintf("rumpuser init failed\n");
+		return -EINVAL;
+	}
+
+	rumpuser_mutex_init(&thrmtx, RUMPUSER_MTX_SPIN);
+	rumpuser_cv_init(&thrcv);
+	threads_are_go = false;
+
+	if (rumpuser_getparam("LKL_BOOT_CMDLINE", buf, sizeof(buf)) == 0)
+		boot_cmdline = buf;
+	else
+		boot_cmdline = "mem=100M virtio-pci.force_legacy=1";
+
+	if (!stack) {
+		stack = rump_mem_alloc(STACKSIZE);
+		if (!stack) {
+			rumpuser_dprintf("rump_mem_alloc failiure\n");
+			return -EINVAL;
+		}
+	}
+
+	lkl_start_kernel(&lkl_host_ops, boot_cmdline);
+
+	/* FIXME: rumprun doesn't have sysproxy.
+	 * maybe outsourced and linked -lsysproxy for hijack case ?
+	 */
+#ifdef ENABLE_SYSPROXY
+	rump_sysproxy_init();
+#endif
+	if (rumpuser_getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
+		if (*buf != 0)
+			verbose = 1;
+	}
+
+	if (verbose)
+		rumpuser_dprintf("rumpuser started.\n");
+	return 0;
+}
+
+void rump_exit(void)
+{
+	if (verbose)
+		rumpuser_dprintf("rumpuser finishing.\n");
+
+	if (stack)
+		rump_mem_free(stack);
+
+#ifdef ENABLE_SYSPROXY
+	rump_sysproxy_fini();
+#endif
+	rumpuser_exit(0);
+}
