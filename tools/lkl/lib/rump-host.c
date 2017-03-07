@@ -668,7 +668,7 @@ int rump___sysimpl_reboot(int opt, char *bootstr)
 int rump_pub_etfs_register(const char *key, const char *hostpath,
 			   enum rump_etfs_type ftype)
 {
-	panic();
+	lkl_printf("warn: rump_pub_etfs_register_register is not supported.\n");
 	return 0;
 }
 
@@ -732,13 +732,11 @@ int rump___sysimpl_ioctl(int fd, u_long com, void *data)
 
 int rump___sysimpl_mkdir(const char *path, mode_t mode)
 {
-	panic();
-	return -1;
+	return lkl_sys_mkdir(path, mode);
 }
 
 int rump___sysimpl_open(const char *name, int flags, ...)
 {
-	panic();
 	return -1;
 }
 
