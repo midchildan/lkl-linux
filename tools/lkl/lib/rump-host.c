@@ -225,7 +225,7 @@ static int rump_thread_join(lkl_thread_t tid)
 
 static lkl_thread_t rump_thread_self(void)
 {
-	return (lkl_thread_t)rumpuser_thread_self();
+	return (lkl_thread_t)bmk_current;
 }
 
 static int rump_thread_equal(lkl_thread_t a, lkl_thread_t b)

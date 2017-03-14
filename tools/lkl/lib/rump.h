@@ -23,5 +23,7 @@ extern const struct rumpuser_hyperup hyp;
 extern struct rump_sysproxy_ops rump_sysproxy_ops;
 #endif
 
+extern __thread struct bmk_thread *bmk_current;
+
 int rump_pci_irq_request(struct irq_data *data);
 void rump_pci_irq_release(struct irq_data *data);
