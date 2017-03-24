@@ -24,7 +24,7 @@ static inline __must_check long __copy_from_user(void *to,
 	ti = current_thread_info();
 
 	if (unlikely(from == NULL && n))
-		return -EFAULT;
+		return n;
 
 	if (!ti->rump_client) {
 		memcpy(to, from, n);
@@ -49,7 +49,7 @@ static inline __must_check long __copy_to_user(void __user *to,
 	ti = current_thread_info();
 
 	if (unlikely(to == NULL && n))
-		return -EFAULT;
+		return n;
 
 	if (!ti->rump_client) {
 		memcpy(to, from, n);

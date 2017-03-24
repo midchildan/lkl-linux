@@ -24,6 +24,7 @@ config LKL
        select HIGH_RES_TIMERS
        select NET_SCHED
        select NET_SCH_FQ
+       select FUTEX
 
 config OUTPUTFORMAT
        string
