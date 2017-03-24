@@ -660,6 +660,7 @@ int rump___sysimpl_reboot(int opt, char *bootstr)
 
 	lkl_umount_all();
 	lkl_sys_halt();
+	rump_exit();
 
 	/* XXX: should not reach, but... */
 	return 0;

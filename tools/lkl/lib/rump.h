@@ -15,6 +15,8 @@
 
 struct irq_data;
 
+void rump_exit(void);
+
 void rump_sysproxy_init(void);
 void rump_sysproxy_fini(void);
 
