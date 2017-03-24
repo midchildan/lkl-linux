@@ -155,28 +155,42 @@ static void rump_mutex_free(struct lkl_mutex *_mutex)
 
 /* XXX: dummy TLS */
 struct lkl_tls_key {
-	unsigned int *key;
+	void *data;
+	void (*destructor)(void *);
 };
-#ifdef RUMP_TLS_SUPPORT
+
 static struct lkl_tls_key *rump_tls_alloc(void (*destructor)(void *))
 {
-	return NULL;
+	struct lkl_tls_key *key;
+
+	rumpuser_malloc(sizeof(struct lkl_tls_key), 0, (void **)&key);
+	key->destructor = destructor;
+	key->data = NULL;
+
+	return key;
 }
 
 static void rump_tls_free(struct lkl_tls_key *key)
 {
+	rumpuser_free(key, sizeof(struct lkl_tls_key));
 }
-#endif /* RUMP_TLS_SUPPORT */
 
 static int rump_tls_set(struct lkl_tls_key *key, void *data)
 {
-	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)data);
+	key->data = data;
+	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, rumpuser_curlwp());
+	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)key);
+
 	return 0;
 }
 
 static void *rump_tls_get(struct lkl_tls_key *key)
 {
-	return rumpuser_curlwp();
+	struct lkl_tls_key *store = (struct lkl_tls_key *)rumpuser_curlwp();
+
+	if (store != key)
+		return NULL;
+	return store ? store->data : NULL;
 }
 
 
@@ -215,6 +229,11 @@ static void rump_thread_detach(void)
 
 static void rump_thread_exit(void)
 {
+	struct lkl_tls_key *key = (struct lkl_tls_key *)rumpuser_curlwp();
+
+	if (key)
+		key->destructor(key->data);
+
 	rumpuser_thread_exit();
 }
 
@@ -529,10 +548,8 @@ struct lkl_host_operations lkl_host_ops = {
 	.mutex_free = rump_mutex_free,
 	.mutex_lock = rump_mutex_lock,
 	.mutex_unlock = rump_mutex_unlock,
-#ifdef RUMP_TLS_SUPPORT
 	.tls_alloc = rump_tls_alloc,
 	.tls_free = rump_tls_free,
-#endif
 	.tls_set = rump_tls_set,
 	.tls_get = rump_tls_get,
 	.time = time_ns,
