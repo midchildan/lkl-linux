@@ -199,13 +199,18 @@ static void *rump_mem_alloc(size_t size)
 {
 	void *mem;
 
-	rumpuser_malloc(size, 0, (void **)&mem);
-	return mem;
+	rumpuser_malloc(size + sizeof(size_t), 0, (void **)&mem);
+	memcpy(mem, &size, sizeof(size_t));
+
+	return mem + sizeof(size_t);
 }
 
 static void rump_mem_free(void *mem)
 {
-	rumpuser_free(mem, 0);
+	size_t size;
+
+	size = *(size_t *)(mem - sizeof(size_t));
+	rumpuser_free(mem - sizeof(size_t), size + sizeof(size_t));
 }
 
 /* thread */
