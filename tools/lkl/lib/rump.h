@@ -28,4 +28,4 @@ extern struct rump_sysproxy_ops rump_sysproxy_ops;
 int rump_pci_irq_request(struct irq_data *data);
 void rump_pci_irq_release(struct irq_data *data);
 
-void *rumprun_thread_self(void);
+void *rumpuser_thread_self(void);
