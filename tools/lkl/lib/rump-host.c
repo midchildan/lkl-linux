@@ -601,11 +601,7 @@ rump_pub_netconfig_ipv4_ifaddr_cidr(const char *ifname, const char *addr,
 	int rv, ifindex;
 	unsigned int v4, d1, d2, d3, d4;
 
-	/* XXX: ifname should be like "eth%d", where ifindex will be
-	 * started from 2.
-	 */
-	ifindex = strtoul(ifname + 3, NULL, 10) + 2;
-
+	ifindex = lkl_ifname_to_ifindex(ifname);
 	lkl_if_up(ifindex);
 
 	rv = sscanf(addr, "%u.%u.%u.%u", &d1, &d2, &d3, &d4);

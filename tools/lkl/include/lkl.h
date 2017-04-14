@@ -315,6 +315,14 @@ int lkl_if_set_ipv6(int ifindex, void* addr, unsigned int netprefix_len);
 int lkl_set_ipv6_gateway(void* addr);
 
 /**
+ * lkl_ifname_to_ifindex - obtain ifindex of an interface by name
+ *
+ * @name - string of an interface
+ * @returns - return an integer of ifindex if no error
+ */
+int lkl_ifname_to_ifindex(const char *name);
+
+/**
  * lkl_netdev - host network device handle, defined in lkl_host.h.
  */
 struct lkl_netdev;
