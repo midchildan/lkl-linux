@@ -260,4 +260,7 @@ static int __init rump_pci_init(void)
 
 	return 0;
 }
-subsys_initcall(rump_pci_init);
+/* XXX: don't spot why but virtio_blk and virtio_net shall be
+ * loaded __before__ pci devices detection
+ */
+late_initcall(rump_pci_init);
