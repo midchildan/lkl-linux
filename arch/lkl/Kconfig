@@ -25,6 +25,10 @@ config LKL
        select NET_SCHED
        select NET_SCH_FQ
        select FUTEX
+       select 9P_FS
+       select NET_9P
+       select NET_9P_VIRTIO
+       select NET_9P_DEBUG
 
 config OUTPUTFORMAT
        string
