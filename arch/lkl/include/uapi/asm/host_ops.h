@@ -133,6 +133,11 @@ struct lkl_host_operations {
 
 	void (*jmp_buf_set)(struct lkl_jmp_buf *jmpb, void (*f)(void));
 	void (*jmp_buf_longjmp)(struct lkl_jmp_buf *jmpb, int val);
+
+	int (*sp_copyin)(void *client, int pid, const void *from, void *to,
+			 int len);
+	int (*sp_copyout)(void *client, int pid, const void *from, void *to,
+			  int len);
 };
 
 /**

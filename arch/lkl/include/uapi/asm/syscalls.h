@@ -306,4 +306,12 @@ long lkl_sys_halt(void);
 #pragma GCC diagnostic pop
 #endif
 
+/* for rump syscall proxy */
+void *lkl_sysproxy_fork(void *priv);
+void *lkl_sysproxy_newlwp(pid_t pid);
+void lkl_sysproxy_lwpexit(void *task);
+pid_t lkl_sysproxy_getpid(void *task);
+pid_t lkl_sysproxy_enter(void);
+void lkl_sysproxy_exit(pid_t pid);
+
 #endif

@@ -25,6 +25,7 @@
 #include <sys/ioctl.h>
 #include <assert.h>
 #include <lkl.h>
+#define CONFIG_AUTO_LKL_POSIX_HOST
 #include <lkl_host.h>
 
 #include "xlate.h"
@@ -189,6 +190,16 @@ int socket(int domain, int type, int protocol)
 		return host_socket(domain, type, protocol);
 
 	return lkl_call(__lkl__NR_socket, 3, domain, type, protocol);
+}
+
+/*
+ * glibc-2.24.4 on FC25 hides a symbol '_socket' which this library
+ * can't hijack the call to. if_nametoindex() in glibc uses this internal
+ * symbol so hijack from upper for iproute2 commands.
+ */
+unsigned int if_nametoindex(const char *ifname)
+{
+	return lkl_ifname_to_ifindex(ifname);
 }
 
 HOST_CALL(ioctl);

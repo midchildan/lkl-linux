@@ -8,10 +8,6 @@
 #include <asm/errno.h>
 #include <asm/thread_info.h>
 
-#ifdef ENABLE_SYSPROXY
-#include <rump/rumpuser.h>
-#endif
-
 #define __access_ok(addr, size) (1)
 
 /* handle rump remote client */
@@ -26,15 +22,11 @@ static inline __must_check long __copy_from_user(void *to,
 	if (unlikely(from == NULL && n))
 		return n;
 
-	if (!ti->rump_client) {
+	if (!ti->rump.remote) /* local case */
 		memcpy(to, from, n);
-	} else if (n) {
-#ifdef ENABLE_SYSPROXY
-		error = rumpuser_sp_copyin(ti->rump_client, from, to, n);
-#else
-		;
-#endif
-	}
+	else /* remote case */
+		error = lkl_ops->sp_copyin(ti->rump.client, ti->task->pid,
+					   from, to, n);
 
 	return error;
 }
@@ -51,15 +43,11 @@ static inline __must_check long __copy_to_user(void __user *to,
 	if (unlikely(to == NULL && n))
 		return n;
 
-	if (!ti->rump_client) {
+	if (!ti->rump.remote) /* local case */
 		memcpy(to, from, n);
-	} else if (n) {
-#ifdef ENABLE_SYSPROXY
-		error = rumpuser_sp_copyout(ti->rump_client, from, to, n);
-#else
-		;
-#endif
-	}
+	else /* remote case */
+		error = lkl_ops->sp_copyout(ti->rump.client, ti->task->pid,
+					    from, to, n);
 
 	return error;
 }

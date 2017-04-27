@@ -119,7 +119,18 @@ long lkl_syscall(long no, long *params)
 
 	switch_to_host_task(task);
 
+	/* rentrant syscall */
+	if (task_thread_info(task)->rump.count)
+		lkl_cpu_put();
+
+	task_thread_info(task)->rump.count++;
+
 	ret = run_syscall(no, params);
+
+	/* rentrant syscall */
+	if (task_thread_info(task)->rump.count >= 2)
+		lkl_cpu_get();
+	task_thread_info(task)->rump.count--;
 
 	if (no == __NR_reboot) {
 		thread_sched_jb();
@@ -159,6 +170,85 @@ static int idle_host_task_loop(void *unused)
 		schedule_tail(ti->prev_sched);
 	}
 }
+
+void *lkl_sysproxy_fork(void *priv)
+{
+	struct task_struct *task;
+	struct thread_info *ti;
+
+	new_host_task(&task);
+	switch_to_host_task(task);
+	ti = task_thread_info(task);
+
+	ti = task_thread_info(get_current());
+	/* store struct spc_client */
+	ti->rump.client = priv;
+
+	return task;
+}
+
+void *lkl_sysproxy_newlwp(pid_t pid)
+{
+	/* find rump_task */
+	struct thread_info *ti = NULL;
+	struct task_struct *task;
+
+	if (pid <= 0)
+		return NULL;
+
+	rcu_read_lock();
+	task = find_task_by_pid_ns(pid, &init_pid_ns);
+	rcu_read_unlock();
+
+	if (pid == 1)
+		return task;
+
+	lkl_cpu_get();
+	switch_to_host_task(task);
+	lkl_cpu_put();
+
+	ti = task_thread_info(task);
+	ti->tid = lkl_ops->thread_self();
+
+	lkl_ops->tls_set(task_key, ti->task);
+
+	return ti->task;
+}
+
+void lkl_sysproxy_lwpexit(void *task)
+{
+#ifdef FIXME
+	del_host_task(task);
+#endif
+}
+
+pid_t lkl_sysproxy_getpid(void *task)
+{
+	return pid_vnr(get_task_pid(task, PIDTYPE_PID));
+}
+
+pid_t lkl_sysproxy_enter(void)
+{
+	struct thread_info *ti = task_thread_info(get_current());
+
+	ti->rump.remote = true;
+
+	return ti->task->pid;
+}
+
+void lkl_sysproxy_exit(pid_t pid)
+{
+	struct task_struct *task;
+	struct thread_info *ti;
+
+	rcu_read_lock();
+	task = find_task_by_pid_ns(pid, &init_pid_ns);
+	rcu_read_unlock();
+
+	ti = task_thread_info(task);
+	ti->rump.remote = false;
+}
+
 
 int syscalls_init(void)
 {

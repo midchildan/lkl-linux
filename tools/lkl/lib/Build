@@ -10,6 +10,7 @@ lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += posix-host.o
 lkl-$(CONFIG_AUTO_LKL_NT_HOST) += nt-host.o
 lkl-$(CONFIG_AUTO_LKL_RUMP_HOST) += rump.o
 lkl-$(CONFIG_AUTO_LKL_RUMP_HOST) += rump-host.o
+lkl-$(CONFIG_AUTO_LKL_RUMP_HOST) += rump-sysproxy.o
 lkl-y += utils.o
 lkl-$(CONFIG_AUTO_LKL_VIRTIO) += virtio_blk.o
 lkl-$(CONFIG_AUTO_LKL_VIRTIO) += virtio.o
@@ -30,3 +31,4 @@ CFLAGS_rump-host.o = -I$(RUMP_PREFIX)/../platform/include \
 		   -I$(RUMP_PREFIX)/../franken/ucontext \
 		   -I../../ \
 		   -DCONFIG_AUTO_LKL_POSIX_HOST -DCONFIG_LKL
+CFLAGS_rump-sysproxy.o += -I$(OUTPUT)/../../include

@@ -17,15 +17,15 @@ struct irq_data;
 
 void rump_exit(void);
 
-void rump_sysproxy_init(void);
-void rump_sysproxy_fini(void);
-
 extern const struct rumpuser_hyperup hyp;
-#ifdef ENABLE_SYSPROXY
-extern struct rump_sysproxy_ops rump_sysproxy_ops;
-#endif
 
 int rump_pci_irq_request(struct irq_data *data);
 void rump_pci_irq_release(struct irq_data *data);
 
+int rump_sp_copyin(void *client, int pid, const void *from, void *to, int n);
+int rump_sp_copyout(void *client, int pid, const void *from, void *to, int n);
+
+/* updated rumpuser hypcall */
 void *rumpuser_thread_self(void);
+struct bmk_thread *bmk_sched_init_mainlwp(void *cookie);
+void *bmk_sched_get_cookie(void);

@@ -102,7 +102,7 @@ ALL_PROGRAMS :=
 ALL_LIBRARIES := $(OUTPUT)liblkl.a $(OUTPUT)liblkl$(SOSUF)
 else
 ALL_PROGRAMS := $(OUTPUT)lklfuse$(EXESUF) $(OUTPUT)cptofs$(EXESUF) $(OUTPUT)cpfromfs$(EXESUF) $(OUTPUT)fs2tar$(EXESUF)
-ALL_LIBRARIES := $(OUTPUT)liblkl.a $(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF)
+ALL_LIBRARIES := $(OUTPUT)liblkl.a $(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF) $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF)
 endif
 
 static: $(OUTPUT)liblkl.a
@@ -115,6 +115,10 @@ $(OUTPUT)liblkl$(SOSUF): LDFLAGS += -shared
 $(OUTPUT)liblkl-hijack$(SOSUF): $(OUTPUT)lib/hijack/hijack-in.o $(OUTPUT)liblkl.a
 $(OUTPUT)liblkl-hijack$(SOSUF): LDFLAGS += -shared -nodefaultlibs
 $(OUTPUT)liblkl-hijack$(SOSUF): LDLIBS += -ldl
+
+$(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): $(OUTPUT)lib/hijack/hijack-sysproxy-in.o $(OUTPUT)/lib/net.o $(RUMP_CLIENT_DIR)/librumpclient_pic.a
+$(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): LDFLAGS += -shared -nodefaultlibs
+$(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): LDLIBS += -ldl $(RUMP_CLIENT_DIR)/librumpclient_pic.a
 
 $(OUTPUT)lklfuse$(EXESUF): $(OUTPUT)lklfuse-in.o $(OUTPUT)liblkl.a
 $(OUTPUT)lklfuse$(EXESUF): LDLIBS += -lfuse
@@ -172,7 +176,7 @@ $(OUTPUT)lib/lkl.o:
 $(OUTPUT)liblkl.a: $(OUTPUT)lib/lkl-in.o $(OUTPUT)lib/lkl.o
 	$(QUIET_AR)$(AR) -rc $@ $^
 
-$(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF) $(OUTPUT)lklfuse$(EXESUF) $(OUTPUT)fs2tar$(EXESUF) $(OUTPUT)cptofs$(EXESUF) $(OUTPUT)tests/boot $(OUTPUT)tests/net-test:
+$(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF) $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF) $(OUTPUT)lklfuse$(EXESUF) $(OUTPUT)fs2tar$(EXESUF) $(OUTPUT)cptofs$(EXESUF) $(OUTPUT)tests/boot $(OUTPUT)tests/net-test:
 	$(QUIET_LINK)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)

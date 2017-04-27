@@ -19,43 +19,37 @@ static void rump_lkl_lwproc_switch(struct lwp *newlwp);
 static void rump_lkl_lwproc_release(void);
 static int rump_lkl_lwproc_rfork(void *priv, int flags, const char *comm);
 
-void
-rump_schedule(void)
+void rump_schedule(void)
 {
 }
 
-void
-rump_unschedule(void)
+void rump_unschedule(void)
 {
 }
 
-int
-rump_daemonize_begin(void)
+int rump_daemonize_begin(void)
 {
 	return 0;
 }
 
-int
-rump_daemonize_done(int error)
+int rump_daemonize_done(int error)
 {
 	return 0;
 }
 
 
-int
-rump_pub_lwproc_rfork(int arg1)
+int rump_pub_lwproc_rfork(int arg1)
 {
 	int rv = 0;
 
 	rump_schedule();
-//	rv = rump_lkl_lwproc_rfork(arg1);
+	rv = rump_lkl_lwproc_rfork(NULL, arg1, NULL);
 	rump_unschedule();
 
 	return rv;
 }
 
-int
-rump_pub_lwproc_newlwp(pid_t arg1)
+int rump_pub_lwproc_newlwp(pid_t arg1)
 {
 	int rv;
 
@@ -66,8 +60,7 @@ rump_pub_lwproc_newlwp(pid_t arg1)
 	return rv;
 }
 
-void
-rump_pub_lwproc_switch(struct lwp *arg1)
+void rump_pub_lwproc_switch(struct lwp *arg1)
 {
 
 	rump_schedule();
@@ -75,8 +68,7 @@ rump_pub_lwproc_switch(struct lwp *arg1)
 	rump_unschedule();
 }
 
-void
-rump_pub_lwproc_releaselwp(void)
+void rump_pub_lwproc_releaselwp(void)
 {
 
 	rump_schedule();
@@ -84,8 +76,7 @@ rump_pub_lwproc_releaselwp(void)
 	rump_unschedule();
 }
 
-struct lwp *
-rump_pub_lwproc_curlwp(void)
+struct lwp *rump_pub_lwproc_curlwp(void)
 {
 	struct lwp *rv;
 
@@ -96,122 +87,96 @@ rump_pub_lwproc_curlwp(void)
 	return rv;
 }
 
-int
-rump_syscall(int num, void *data, size_t dlen, long *retval)
+int rump_syscall(int num, void *data, long *retval)
 {
 	int ret = 0;
+	pid_t pid;
 
+	pid = lkl_sysproxy_enter();
 	ret = lkl_syscall(num, (long *)data);
+	lkl_sysproxy_exit(pid);
+
 	/* FIXME: need better err translation */
 	if (ret < 0) {
-		retval[0] = -ret;
+		retval[0] = ret;
 		ret = -1;
+	} else {
+		retval[0] = ret;
+		ret = 0;
 	}
 	return ret;
 }
 
-
-static int
-rump_lkl_hyp_syscall(int num, void *arg, long *retval)
+static int rump_lkl_lwproc_rfork(void *priv, int flags, const char *comm)
 {
-	return rump_syscall(num, arg, 0, retval);
-}
+	void *task = lkl_sysproxy_fork(priv);
 
-static int
-rump_lkl_lwproc_rfork(void *priv, int flags, const char *comm)
-{
-#ifdef ENABLE_SYSPROXY
-	/* FIXME: needs new task_struct instead of get_current() */
-	struct thread_info *ti = task_thread_info(get_current());
-
-	/* store struct spc_client */
-	ti->rump_client = priv;
-
-	rumpuser_curlwpop(RUMPUSER_LWP_CREATE, (struct lwp *)ti);
-	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)ti);
-#endif
+	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, rumpuser_curlwp());
+	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)task);
 	return 0;
 }
 
-static void
-rump_lkl_lwproc_release(void)
+static void rump_lkl_lwproc_release(void)
 {
-	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
+	void *task = rumpuser_curlwp();
 
-	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, (struct lwp *)ti);
+	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, (struct lwp *)task);
 }
 
-static void
-rump_lkl_lwproc_switch(struct lwp *newlwp)
+static void rump_lkl_lwproc_switch(struct lwp *newlwp)
 {
-	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
+	void *task = rumpuser_curlwp();
 
-	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, (struct lwp *)ti);
-	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)ti);
+	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, (struct lwp *)task);
+	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)newlwp);
 }
 
 /* find rump_task created by rfork */
-static int
-rump_lkl_lwproc_newlwp(pid_t pid)
+static int rump_lkl_lwproc_newlwp(pid_t pid)
 {
-#ifdef FIXME
-	/* find rump_task */
-	struct thread_info *ti = NULL;
-	struct task_struct *p;
+	void *task;
 
-	for_each_process(p) {
-		if (p->pid == pid) {
-			ti = task_thread_info(p);
-			break;
-		}
-	}
-
-	if (!ti) {
-		pr_warn("newlwp: could not find pid %d\n", pid);
-		ti = current_thread_info();
-		/* FIXME */
-//		return ESRCH;
-	}
-
+	task = lkl_sysproxy_newlwp(pid);
 	/* set to currnet */
-	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)ti);
+	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, rumpuser_curlwp());
+	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)task);
 
-#endif /* FIXME */
 	return 0;
 }
 
-static struct lwp *
-rump_lkl_lwproc_curlwp(void)
+static struct lwp *rump_lkl_lwproc_curlwp(void)
 {
 	return rumpuser_curlwp();
 }
 
-static void
-rump_lkl_hyp_lwpexit(void)
+static void rump_lkl_hyp_lwpexit(void)
 {
-	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
+	void *task = rumpuser_curlwp();
 
-	rumpuser_curlwpop(RUMPUSER_LWP_DESTROY, (struct lwp *)ti);
-#ifdef FIXME
-	free_thread_info(ti);
-#endif
+	rumpuser_curlwpop(RUMPUSER_LWP_DESTROY, (struct lwp *)task);
+	lkl_sysproxy_lwpexit(task);
 }
 
-static pid_t
-rump_lkl_hyp_getpid(void)
+static pid_t loc_pid = 1000;
+static pid_t rump_lkl_hyp_getpid(void)
 {
-#ifdef FIXME
-	struct thread_info *ti = (struct thread_info *)rumpuser_curlwp();
+	void *task = (struct thread_info *)rumpuser_curlwp();
 
-	return ti->task->pid;
-#endif
-	return -1;
+	return task ? lkl_sysproxy_getpid(task) : loc_pid++;
 }
 
 static void rump_lkl_user_unschedule(int nlocks, int *countp,
-				       void *interlock) {}
-static void rump_lkl_user_schedule(int nlocks, void *interlock) {}
-static void rump_lkl_hyp_execnotify(const char *comm) {}
+				     void *interlock)
+{
+}
+
+static void rump_lkl_user_schedule(int nlocks, void *interlock)
+{
+}
+
+static void rump_lkl_hyp_execnotify(const char *comm)
+{
+}
 
 const struct rumpuser_hyperup hyp = {
 	.hyp_schedule		= rump_schedule,
@@ -225,10 +190,9 @@ const struct rumpuser_hyperup hyp = {
 	.hyp_lwproc_curlwp	= rump_lkl_lwproc_curlwp,
 
 	.hyp_getpid		= rump_lkl_hyp_getpid,
-	.hyp_syscall		= rump_lkl_hyp_syscall,
+	.hyp_syscall		= rump_syscall,
 	.hyp_lwproc_rfork	= rump_lkl_lwproc_rfork,
 	.hyp_lwpexit		= rump_lkl_hyp_lwpexit,
 	.hyp_execnotify		= rump_lkl_hyp_execnotify,
 };
-
 

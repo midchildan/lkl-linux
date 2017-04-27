@@ -175,24 +175,28 @@ static void rump_tls_free(struct lkl_tls_key *key)
 	rumpuser_free(key, sizeof(struct lkl_tls_key));
 }
 
+struct lkl_tls_key *tls_key;
+
 static int rump_tls_set(struct lkl_tls_key *key, void *data)
 {
-	key->data = data;
-	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, rumpuser_curlwp());
-	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)key);
+	struct lkl_tls_key *new = (struct lkl_tls_key *)bmk_sched_get_cookie();
+
+	if (!new)
+		rumpuser_malloc(sizeof(struct lkl_tls_key), 0, (void **)&new);
+
+	new->destructor = key->destructor;
+	new->data = data;
+	bmk_sched_init_mainlwp(new);
 
 	return 0;
 }
 
 static void *rump_tls_get(struct lkl_tls_key *key)
 {
-	struct lkl_tls_key *store = (struct lkl_tls_key *)rumpuser_curlwp();
+	struct lkl_tls_key *new = (struct lkl_tls_key *)bmk_sched_get_cookie();
 
-	if (store != key)
-		return NULL;
-	return store ? store->data : NULL;
+	return new ? new->data : NULL;
 }
-
 
 /* memory */
 static void *rump_mem_alloc(size_t size)
@@ -234,10 +238,12 @@ static void rump_thread_detach(void)
 
 static void rump_thread_exit(void)
 {
-	struct lkl_tls_key *key = (struct lkl_tls_key *)rumpuser_curlwp();
+	struct lkl_tls_key *key = bmk_sched_get_cookie();
 
-	if (key)
+	if (key) {
 		key->destructor(key->data);
+		rumpuser_free(key, sizeof(struct lkl_tls_key));
+	}
 
 	rumpuser_thread_exit();
 }
@@ -574,6 +580,8 @@ struct lkl_host_operations lkl_host_ops = {
 #ifndef RUMPRUN
 	.virtio_devices = lkl_virtio_devs,
 #endif
+	.sp_copyin = rump_sp_copyin,
+	.sp_copyout = rump_sp_copyout,
 };
 
 /* stub calls */
@@ -677,6 +685,7 @@ int rump___sysimpl_reboot(int opt, char *bootstr)
 {
 
 	lkl_umount_all();
+	rumpuser_sp_fini(NULL);
 	lkl_sys_halt();
 	rump_exit();
 
@@ -944,12 +953,6 @@ int rump_init(void)
 
 	lkl_start_kernel(&lkl_host_ops, boot_cmdline);
 
-	/* FIXME: rumprun doesn't have sysproxy.
-	 * maybe outsourced and linked -lsysproxy for hijack case ?
-	 */
-#ifdef ENABLE_SYSPROXY
-	rump_sysproxy_init();
-#endif
 	if (rumpuser_getparam("RUMP_VERBOSE", buf, sizeof(buf)) == 0) {
 		if (*buf != 0)
 			verbose = 1;
@@ -968,8 +971,5 @@ void rump_exit(void)
 	if (stack)
 		rump_mem_free(stack);
 
-#ifdef ENABLE_SYSPROXY
-	rump_sysproxy_fini();
-#endif
 	rumpuser_exit(0);
 }

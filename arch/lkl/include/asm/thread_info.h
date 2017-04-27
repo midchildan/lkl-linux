@@ -12,6 +12,12 @@ typedef struct {
 	unsigned long seg;
 } mm_segment_t;
 
+struct rump_sysproxy_info {
+	void *client;		/* client handle */
+	bool remote;		/* is remote syscall */
+	int count;		/* reentrancy count */
+};
+
 struct thread_info {
 	struct task_struct *task;
 	unsigned long flags;
@@ -21,8 +27,8 @@ struct thread_info {
 	struct lkl_jmp_buf sched_jb;
 	bool dead;
 	lkl_thread_t tid;
+	struct rump_sysproxy_info rump;	/* for syscall proxy */
 	struct task_struct *prev_sched;
-	void *rump_client;	/* for syscall proxy */
 	unsigned long stackend;
 };
 
