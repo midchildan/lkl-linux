@@ -190,6 +190,10 @@ ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   install: headers_install libraries_install programs_install
 else ifneq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
   ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+  # If there is no librumpclient_pic.a, skip sysproxy client build
+  ifeq (,$(wildcard $(RUMP_CLIENT_DIR)/librumpclient_pic.a))
+    ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF), $(ALL_LIBRARIES))
+  endif
   all: $(ALL_LIBRARIES)
   install: headers_install libraries_install
 else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
