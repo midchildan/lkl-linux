@@ -109,7 +109,12 @@ int rump_syscall(int num, void *data, long *retval)
 
 static int rump_lkl_lwproc_rfork(void *priv, int flags, const char *comm)
 {
-	void *task = lkl_sysproxy_fork(priv);
+	void *task;
+
+	if (!priv)
+		return 0;
+
+	task = lkl_sysproxy_fork(priv);
 
 	rumpuser_curlwpop(RUMPUSER_LWP_CLEAR, rumpuser_curlwp());
 	rumpuser_curlwpop(RUMPUSER_LWP_SET, (struct lwp *)task);
