@@ -27,5 +27,5 @@ int rump_sp_copyout(void *client, int pid, const void *from, void *to, int n);
 
 /* updated rumpuser hypcall */
 void *rumpuser_thread_self(void);
-struct bmk_thread *bmk_sched_init_mainlwp(void *cookie);
-void *bmk_sched_get_cookie(void);
+void *rumpuser_getcookie(void);
+void rumpuser_setcookie(void* cookie);
