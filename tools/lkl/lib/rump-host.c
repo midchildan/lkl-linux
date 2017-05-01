@@ -179,21 +179,21 @@ struct lkl_tls_key *tls_key;
 
 static int rump_tls_set(struct lkl_tls_key *key, void *data)
 {
-	struct lkl_tls_key *new = (struct lkl_tls_key *)bmk_sched_get_cookie();
+	struct lkl_tls_key *new = rumpuser_getcookie();
 
 	if (!new)
 		rumpuser_malloc(sizeof(struct lkl_tls_key), 0, (void **)&new);
 
 	new->destructor = key->destructor;
 	new->data = data;
-	bmk_sched_init_mainlwp(new);
+	rumpuser_setcookie(new);
 
 	return 0;
 }
 
 static void *rump_tls_get(struct lkl_tls_key *key)
 {
-	struct lkl_tls_key *new = (struct lkl_tls_key *)bmk_sched_get_cookie();
+	struct lkl_tls_key *new = rumpuser_getcookie();
 
 	return new ? new->data : NULL;
 }
@@ -238,7 +238,7 @@ static void rump_thread_detach(void)
 
 static void rump_thread_exit(void)
 {
-	struct lkl_tls_key *key = bmk_sched_get_cookie();
+	struct lkl_tls_key *key = rumpuser_getcookie();
 
 	if (key) {
 		key->destructor(key->data);
