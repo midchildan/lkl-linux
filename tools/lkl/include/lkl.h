@@ -290,6 +290,15 @@ int lkl_if_set_ipv4(int ifindex, unsigned int addr, unsigned int netmask_len);
 int lkl_set_ipv4_gateway(unsigned int addr);
 
 /**
+ * lkl_if_set_ipv4_gateway - add an IPv4 default route on interface
+ *
+ * @ifindex - the ifindex of the interface
+ * @addr - 4-byte IP address of the gateway (i.e., struct in_addr)
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_if_set_ipv4_gateway(int ifindex, unsigned int addr);
+
+/**
  * lkl_if_set_ipv6 - set IPv6 address on interface
  * must be called after interface is up.
  *
@@ -450,6 +459,7 @@ int lkl_if_add_ip(int ifindex, int af, void *addr, unsigned int netprefix_len);
  */
 int lkl_if_del_ip(int ifindex, int af, void *addr, unsigned int netprefix_len);
 
+
 /**
  * lkl_if_wait_ipv6_dad - wait for DAD to be done for a ipv6 address
  * must be called after interface is up
@@ -464,6 +474,23 @@ int lkl_if_wait_ipv6_dad(int ifindex, void *addr);
  * @fd_limit - fd max limit
  */
 int lkl_set_fd_limit(unsigned int fd_limit);
+
+/**
+ * lkl_if_add_gateway - add a gateway
+ * @ifindex - the ifindex of the interface
+ * @af - address family of the ip address. Must be LKL_AF_INET or LKL_AF_INET6
+ * @addr - ip address of the entry in network byte order
+ * @netprefix_len - prefix length of the @addr
+ */
+int lkl_if_add_gateway(int ifindex, int af, unsigned int addr, 
+		unsigned int netprefix_len);
+
+/**
+ * lkl_if_add_rle - add a rule
+ * @ifindex - the ifindex of the interface
+ * @addr - ip address of the entry in network byte order
+ */
+int lkl_if_add_rule(int ifindex, unsigned int addr);
 
 /**
  * lkl_qdisc_add - set qdisc rule onto an interface

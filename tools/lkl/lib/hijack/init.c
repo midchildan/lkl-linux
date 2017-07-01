@@ -212,7 +212,10 @@ hijack_init(void)
 	char *netmask6_len[2];
 	netmask6_len[0] = getenv("LKL_HIJACK_NET_NETMASK6_LEN0");
 	netmask6_len[1] = getenv("LKL_HIJACK_NET_NETMASK6_LEN1");
-	char *gateway = getenv("LKL_HIJACK_NET_GATEWAY");
+	char *if_gateway[2];
+	if_gateway[0] = getenv("LKL_HIJACK_NET_GATEWAY0");
+	if_gateway[1] = getenv("LKL_HIJACK_NET_GATEWAY1");
+	char *gateway = getenv("LKL_HIJACK_NET_GATEWAY");;
 	char *gateway6 = getenv("LKL_HIJACK_NET_GATEWAY6");
 	char *debug = getenv("LKL_HIJACK_DEBUG");
 	char *mount = getenv("LKL_HIJACK_MOUNT");
@@ -438,6 +441,17 @@ hijack_init(void)
 			add_neighbor(nd_ifindex, neigh_entries[i]);
 
 		nd_flag |= 1;
+
+		if (nd_flag && if_gateway[i]) {
+			unsigned int addr = inet_addr(if_gateway[i]);
+
+			if (addr != INADDR_NONE) {
+				ret = lkl_if_set_ipv4_gateway(nd_ifindex, addr);
+				if (ret< 0)
+					fprintf(stderr, "failed to set IPv4 gateway: %s\n",
+							lkl_strerror(ret));
+			}
+		}
 	}
 
 	if (nd_flag && gateway) {
@@ -450,6 +464,7 @@ hijack_init(void)
 						lkl_strerror(ret));
 		}
 	}
+
 
 	if (nd_flag && gateway6) {
 		char gw[16];
@@ -467,9 +482,10 @@ hijack_init(void)
 	if (mount)
 		mount_cmds_exec(mount, lkl_mount_fs);
 
-
 	if (sysctls)
 		lkl_sysctl_parse_write(sysctls);
+
+	sleep(1);
 }
 
 void __attribute__((destructor))

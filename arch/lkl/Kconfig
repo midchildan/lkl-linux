@@ -26,6 +26,11 @@ config LKL
        select MPTCP
        select MPTCP_FULLMESH
        select MPTCP_PM_ADVANCED
+       select IP_MULTICAST
+       select IP_MULTIPLE_TABLES
+       select IP_ROUTE_MULTIPATH
+       select IP_ADVANCED_ROUTER
+
 
 config OUTPUTFORMAT
        string
