@@ -321,9 +321,12 @@ hijack_init(void)
 				}
 				//offload[i] = 0;
 				if (strcmp(iftype[i], "dpdk") == 0)
+					;
+				/*
 					nd[i] = lkl_netdev_dpdk_create(ifparams[i]);
 				else if (strcmp(iftype[i], "vde") == 0)
 					nd[i] = lkl_netdev_vde_create(ifparams[i]);
+				*/
 				else if (strcmp(iftype[i], "raw") == 0)
 					nd[i] = lkl_netdev_raw_create(ifparams[i]);
 			}
@@ -357,6 +360,14 @@ hijack_init(void)
 
 	if (single_cpu_mode == 1)
 		PinToFirstCpu(&ori_cpu);
+
+	struct sigaction sa;
+	sa.sa_handler = SIG_IGN;
+	sa.sa_flags = 0;
+	if (sigaction(32, &sa, 0) == -1) {
+		perror("sigaction");
+		exit(1);
+	}
 
 	ret = lkl_start_kernel(&lkl_host_ops, boot_cmdline);
 	if (ret) {

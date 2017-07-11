@@ -2,8 +2,10 @@ include arch/lkl/auto.conf
 
 KBUILD_CFLAGS += -fno-builtin
 
-ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf64-x86-64-freebsd elf32-littlearm ))
+ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf64-x86-64-freebsd elf64-littleaarch64))
 KBUILD_CFLAGS += -fPIC
+else ifneq (,$(filter $(OUTPUT_FORMAT),elf32-littlearm))
+KBUILD_CFLAGS += -fPIC -march=armv8-a
 else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386 pe-x86-64 ))
 ifneq ($(OUTPUT_FORMAT),pe-x86-64)
 prefix=_
@@ -32,6 +34,8 @@ core-y += arch/lkl/mm/
 all: lkl.o
 
 lkl.o: vmlinux
+#	cp vmlinux lkl.o
+#	$(OBJCOPY) -R .eh_frame -R .syscall_defs vmlinux lkl.o
 	$(OBJCOPY) -R .eh_frame -R .syscall_defs $(foreach sym,$(LKL_ENTRY_POINTS),-G$(prefix)$(sym)) vmlinux lkl.o
 
 arch/lkl/include/generated/uapi/asm/syscall_defs.h: vmlinux

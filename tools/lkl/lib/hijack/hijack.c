@@ -193,7 +193,7 @@ int socket(int domain, int type, int protocol)
 }
 
 HOST_CALL(ioctl);
-int ioctl(int fd, unsigned long req, ...)
+int ioctl(int fd, int req, ...)
 {
 	va_list vl;
 	long arg;
