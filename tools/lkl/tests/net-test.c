@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#include <linux/icmp.h>
 
 #include <lkl.h>
 #include <lkl_host.h>

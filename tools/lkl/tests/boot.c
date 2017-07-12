@@ -66,7 +66,7 @@ static int parse_opt(int key, char *arg)
 	return 0;
 }
 
-void printk(const char *str, int len)
+static void printk(const char *str, int len)
 {
 	int ret __attribute__((unused));
 
