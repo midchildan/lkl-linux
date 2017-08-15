@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/stat.h>
+//#include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/ioctl.h>
@@ -184,6 +184,22 @@ static struct lkl_netdev *nd[2];
 void __attribute__((constructor(102)))
 hijack_init(void)
 {
+#if 0
+setenv("LKL_HIJACK_NET_IFTYPE0", "raw", 0);
+setenv("LKL_HIJACK_NET_IFPARAMS0", "eth0", 0);
+setenv("LKL_HIJACK_NET_MAC0", "80:54:00:12:34:56", 0);
+setenv("LKL_HIJACK_BOOT_CMDLINE", "ip=dhcp", 0);
+#endif
+
+#if 0
+#include <android/log.h>
+	if (system("/system/xbin/su") != 0) {
+__android_log_print(ANDROID_LOG_ERROR, "lkl", "su (%d)\n", errno);
+}
+	if (setuid(0) != 0) {
+		fprintf(stderr, "setuid failure\n");
+	}
+#endif
 	int ret, i, dev_null, nd_ifindex;
 	/* OBSOLETE: should use IFTYPE and IFPARAMS */
 	//char *tap = getenv("LKL_HIJACK_NET_TAP");
@@ -400,6 +416,9 @@ hijack_init(void)
 
 	for (i = 1; i < LKL_FD_OFFSET; i++)
 		lkl_sys_dup(dev_null);
+
+	extern int dual_fds[];
+	memset(dual_fds, -1, sizeof(int) * 512);
 
 	/* lo iff_up */
 	lkl_if_up(1);
