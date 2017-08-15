@@ -328,7 +328,11 @@ hijack_init(void)
 					nd[i] = lkl_netdev_vde_create(ifparams[i]);
 				*/
 				else if (strcmp(iftype[i], "raw") == 0)
-					nd[i] = lkl_netdev_raw_create(ifparams[i]);
+					nd[i] = lkl_netdev_raw_create(
+						ifparams[i], 1);
+				else if (strcmp(iftype[i], "raw-ipenc") == 0)
+					nd[i] = lkl_netdev_raw_create(
+						ifparams[i], 0);
 			}
 		}
 
@@ -409,6 +413,12 @@ hijack_init(void)
 			else
 				fprintf(stderr, "failed to get ifindex for netdev id %d: %s\n",
 						nd_id[i], lkl_strerror(nd_ifindex));
+
+			int lkl_netdev_ipencap_conf(int ifindex, struct lkl_netdev *nd);
+			if (nd[i]->is_ip_encap)
+				lkl_netdev_ipencap_conf(nd_ifindex, nd[i]);
+
+
 		}
 
 		if (nd_ifindex >= 0 && mtu_str[i]) {
