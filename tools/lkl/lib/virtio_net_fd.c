@@ -47,10 +47,18 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 	struct lkl_netdev_fd *nd_fd =
 		container_of(nd, struct lkl_netdev_fd, dev);
 
-	if (nd->is_ip_encap && iov[0].iov_len > 0) {
+	if (nd->is_ip_encap) {
 		/* XXX */
-		iov[0].iov_base += LKL_ETH_HLEN;
-		iov[0].iov_len -= LKL_ETH_HLEN;
+		if (iov[0].iov_len > LKL_ETH_HLEN) {
+			iov[0].iov_base += LKL_ETH_HLEN;
+			iov[0].iov_len -= LKL_ETH_HLEN;
+		}
+		else if (iov[1].iov_len > LKL_ETH_HLEN && cnt > 1) {
+			iov[1].iov_base += LKL_ETH_HLEN;
+			iov[1].iov_len -= LKL_ETH_HLEN;
+		}
+		else
+			fprintf(stderr, "wrong length: 0:%d, 1:%d, cnt:%d\n", iov[0].iov_len, iov[1].iov_len, cnt);
 	}
 
 	do {
