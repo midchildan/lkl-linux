@@ -184,22 +184,23 @@ static struct lkl_netdev *nd[2];
 void __attribute__((constructor(102)))
 hijack_init(void)
 {
-#if 0
+#if 1				/* for emulator */
 setenv("LKL_HIJACK_NET_IFTYPE0", "raw", 0);
 setenv("LKL_HIJACK_NET_IFPARAMS0", "eth0", 0);
-setenv("LKL_HIJACK_NET_MAC0", "80:54:00:12:34:56", 0);
+setenv("LKL_HIJACK_NET_MAC0", "34:9a:02:42:a3:7e", 0);
 setenv("LKL_HIJACK_BOOT_CMDLINE", "ip=dhcp", 0);
 #endif
 
-#if 0
-#include <android/log.h>
-	if (system("/system/xbin/su") != 0) {
-__android_log_print(ANDROID_LOG_ERROR, "lkl", "su (%d)\n", errno);
-}
-	if (setuid(0) != 0) {
-		fprintf(stderr, "setuid failure\n");
-	}
+#if 0				/* for nexus5 phone */
+setenv("LKL_HIJACK_NET_IFTYPE0", "raw", 0);
+setenv("LKL_HIJACK_NET_IFPARAMS0", "wlan0", 0);
+setenv("LKL_HIJACK_NET_MAC0", "c4:9a:02:42:a3:7e", 0);
+setenv("LKL_HIJACK_NET_IP0", "192.168.2.10", 0);
+setenv("LKL_HIJACK_NET_NETMASK_LEN0", "24", 0);
+setenv("LKL_HIJACK_NET_GATEWAY", "192.168.2.1", 0);
+//setenv("LKL_HIJACK_BOOT_CMDLINE", "ip=dhcp", 0);
 #endif
+
 	int ret, i, dev_null, nd_ifindex;
 	/* OBSOLETE: should use IFTYPE and IFPARAMS */
 	//char *tap = getenv("LKL_HIJACK_NET_TAP");
