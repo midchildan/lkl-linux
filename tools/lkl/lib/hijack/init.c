@@ -186,7 +186,7 @@ hijack_init(void)
 {
 #if 1				/* for emulator */
 setenv("LKL_HIJACK_NET_IFTYPE0", "raw", 0);
-setenv("LKL_HIJACK_NET_IFPARAMS0", "eth0", 0);
+setenv("LKL_HIJACK_NET_IFPARAMS0", "eth1", 0);
 setenv("LKL_HIJACK_NET_MAC0", "34:9a:02:42:a3:7e", 0);
 setenv("LKL_HIJACK_BOOT_CMDLINE", "ip=dhcp", 0);
 #endif
