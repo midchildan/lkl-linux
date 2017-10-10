@@ -32,6 +32,7 @@ config LKL
        select IPV6_ROUTE_MULTIPATH
        select IP_ADVANCED_ROUTER
        select IPV6_ADVANCED_ROUTER
+       select MPTCP
 
 config OUTPUTFORMAT
        string
