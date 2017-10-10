@@ -12,7 +12,6 @@ config LKL
        select NO_HZ_IDLE
        select NO_PREEMPT
        select ARCH_WANT_FRAME_POINTERS
-       select HAS_DMA
        select PHYS_ADDR_T_64BIT if 64BIT
        select 64BIT if OUTPUT_FORMAT = "elf64-x86-64"
 	   select 64BIT if OUTPUT_FORMAT = "pe-x86-64"
@@ -48,6 +47,9 @@ config ARCH_DMA_ADDR_T_64BIT
 
 config 64BIT
        def_bool n
+
+config NO_DMA
+       def_bool y
 
 config BIG_ENDIAN
        def_bool n
