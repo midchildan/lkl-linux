@@ -263,6 +263,12 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 
 int __poll(struct pollfd *, nfds_t, int) __attribute__((alias("poll")));
 
+int __poll_chk(struct pollfd *fds, nfds_t nfds, int timeout, size_t len)
+{
+	return __poll(fds, nfds, timeout);
+}
+
+
 HOST_CALL(select);
 int select(int nfds, fd_set *r, fd_set *w, fd_set *e, struct timeval *t)
 {
