@@ -1935,3 +1935,8 @@ void __init boot_cpu_state_init(void)
 {
 	per_cpu_ptr(&cpuhp_state, smp_processor_id())->state = CPUHP_ONLINE;
 }
+
+void __weak cpu_yield_to_irqs(void)
+{
+}
+EXPORT_SYMBOL(cpu_yield_to_irqs);

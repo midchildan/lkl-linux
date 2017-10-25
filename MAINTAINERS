@@ -7354,6 +7354,14 @@ M:	Kees Cook <keescook@chromium.org>
 S:	Maintained
 F:	drivers/misc/lkdtm*
 
+LINUX KERNEL LIBRARY
+M:	Octavian Purdila <octavian.purdila@intel.com>
+M:	Hajime Tazaki <thehajime@gmail.com>
+L:	linux-kernel-library@freelists.org
+S:	Maintained
+F:	arch/lkl/
+F:	tools/lkl/
+
 LLC (802.2)
 M:	Arnaldo Carvalho de Melo <acme@ghostprotocols.net>
 S:	Maintained
