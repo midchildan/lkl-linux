@@ -1,7 +1,7 @@
 #ifndef _ASM_LKL_DMA_MAPPING_H
 #define _ASM_LKL_DMA_MAPPING_H
 
-static inline const struct dma_map_ops *get_arch_dma_ops(struct bus_type *bus)
+static inline struct dma_map_ops *get_dma_ops(struct device *dev)
 {
 	return &dma_noop_ops;
 }
