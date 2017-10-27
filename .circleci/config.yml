@@ -32,6 +32,10 @@ jobs:
         key: compiler-cache0-{{ checksum "~/project/tools/lkl/liblkl-hijack.so" }}
         paths:
           - /home/ubuntu/.ccache
+     - run: ./.circleci/pkgbuild.sh
+     - store_artifacts:
+        path: deb/pkgs/
+        destination: pkgs/
 
   mingw32:
    docker:
