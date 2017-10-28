@@ -33,6 +33,10 @@ config LKL
        select IP_ADVANCED_ROUTER
        select IPV6_ADVANCED_ROUTER
        select MPTCP
+       select MPTCP_PM_ADVANCED
+       select MPTCP_FULLMESH
+       select MPTCP_NDIFFPORTS
+       select MPTCP_BINDER
 
 config OUTPUTFORMAT
        string
