@@ -246,4 +246,6 @@ void cpuhp_report_idle_dead(void);
 static inline void cpuhp_report_idle_dead(void) { }
 #endif /* #ifdef CONFIG_HOTPLUG_CPU */
 
+void cpu_yield_to_irqs(void);
+
 #endif /* _LINUX_CPU_H_ */
