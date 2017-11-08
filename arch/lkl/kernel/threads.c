@@ -1,7 +1,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
-#include <linux/sched/task.h>
-#include <linux/sched/signal.h>
+#include <linux/sched.h>
 #include <asm/host_ops.h>
 #include <asm/cpu.h>
 #include <asm/sched.h>
