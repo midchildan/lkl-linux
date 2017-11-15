@@ -19,6 +19,9 @@ void rump_exit(void);
 
 extern const struct rumpuser_hyperup hyp;
 
+int rump_iomem_read(const volatile void *src, volatile void *dst, int size);
+int rump_iomem_write(volatile void *dst, volatile void *val, int size);
+
 int rump_pci_irq_request(struct irq_data *data);
 void rump_pci_irq_release(struct irq_data *data);
 

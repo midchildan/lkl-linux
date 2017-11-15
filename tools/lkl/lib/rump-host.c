@@ -571,7 +571,8 @@ struct lkl_host_operations lkl_host_ops = {
 	.mem_alloc = rump_mem_alloc,
 	.mem_free = rump_mem_free,
 	.ioremap = lkl_ioremap,
-	.iomem_access = lkl_iomem_access,
+	.iomem_read = rump_iomem_read,
+	.iomem_write = rump_iomem_write,
 	.jmp_buf_set = jmp_buf_set,
 	.jmp_buf_longjmp = jmp_buf_longjmp,
 	.irq_request = rump_pci_irq_request,
@@ -766,6 +767,20 @@ int rump___sysimpl_mkdir(const char *path, mode_t mode)
 int rump___sysimpl_open(const char *name, int flags, ...)
 {
 	return -1;
+}
+
+/* FIXME: Compatibility stub, to be removed along w/ lkl_iomem_access */
+int __attribute__((weak)) rump_iomem_read(const volatile void* src, volatile void *dst, int size)
+{
+	lkl_printf("compatibility stub\n");
+	return lkl_iomem_read(src, dst, size);
+}
+
+/* FIXME: Compatibility stub, to be removed along w/ lkl_iomem_access */
+int __attribute__((weak)) rump_iomem_write(volatile void* src, volatile void *val, int size)
+{
+	lkl_printf("compatibility stub\n");
+	return lkl_iomem_write(src, val, size);
 }
 
 #endif /* RUMP_TEMP_STUB */
