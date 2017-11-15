@@ -71,7 +71,8 @@ void *lkl_ioremap(long addr, int size)
 #endif
 }
 
-int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
+/* TODO: deprecate this function */
+static inline int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
 {
 	/* FIXME: should be transparent with platform/ */
 #ifdef RUMPRUN
@@ -169,4 +170,12 @@ int lkl_iomem_access(const volatile void *addr, void *res, int size, int write)
 
 #endif
 	return ret;
+}
+
+int lkl_iomem_read(const volatile void* src, volatile void *dst, int size) {
+  return lkl_iomem_access(src, dst, size, 0);
+}
+
+int lkl_iomem_write(volatile void* src, volatile void *val, int size) {
+  return lkl_iomem_access(src, val, size, 1);
 }

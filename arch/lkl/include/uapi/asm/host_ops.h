@@ -65,8 +65,10 @@ struct lkl_jmp_buf {
  *
  * @ioremap - searches for an I/O memory region identified by addr and size and
  * returns a pointer to the start of the address range that can be used by
- * iomem_access
- * @iomem_acess - reads or writes to and I/O memory region; addr must be in the
+ * iomem_read & iomem_write
+ * @iomem_read - reads I/O memory region; addr must be in the
+ * range returned by ioremap
+ * @iomem_write - writes to I/O memory region; addr must be in the
  * range returned by ioremap
  *
  * @gettid - returns the host thread id of the caller, which need not
@@ -121,8 +123,8 @@ struct lkl_host_operations {
 	void (*timer_free)(void *timer);
 
 	void* (*ioremap)(long addr, int size);
-	int (*iomem_access)(const volatile void *addr, void *val, int size,
-			    int write);
+	int (*iomem_read)(const volatile void *src, volatile void *dst, int size);
+	int (*iomem_write)(volatile void *dst, volatile void *val, int size);
 
 	int (*irq_request)(struct irq_data *data);
 	void (*irq_release)(struct irq_data *data);
