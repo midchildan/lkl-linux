@@ -136,7 +136,7 @@ long lkl_sys_halt(void)
 	atomic_ops_cleanup();
 	/* Shutdown the clockevents source. */
 	tick_suspend_local();
-	free_mem();
+	lkl_free_mem();
 
 	return 0;
 }
