@@ -38,15 +38,31 @@
 
 #include "pci_user.h"
 
+#define PCI_CONF_ADDR 0xcf8
+#define PCI_CONF_DATA 0xcfc
+
 struct rump_pci_sysdata {
 	int domain; /* PCI domain */
 };
 
-/* stubs: should not called */
+static uint32_t makeaddr(unsigned int bus, unsigned int dev,
+                         unsigned int fun, int reg)
+{
+	return (1<<31) | (bus<<16) | (dev<<11) | (fun<<8) | (reg & 0xfc);
+}
+
 int __weak rumpcomp_pci_confread(unsigned int bus, unsigned int dev,
 				 unsigned int fun,
 				 int reg, unsigned int *value)
 {
+	uint32_t addr;
+        unsigned int data;
+
+        addr = makeaddr(bus, dev, fun, reg);
+        outl(PCI_CONF_ADDR, addr);
+        data = inl(PCI_CONF_DATA);
+
+	*value = data;
 	return 0;
 }
 
@@ -54,6 +70,12 @@ int __weak rumpcomp_pci_confwrite(unsigned int bus, unsigned int dev,
 				  unsigned int fun,
 				  int reg, unsigned int value)
 {
+	uint32_t addr;
+
+        addr = makeaddr(bus, dev, fun, reg);
+        outl(PCI_CONF_ADDR, addr);
+        outl(PCI_CONF_ADDR, value);
+
 	return 0;
 }
 
