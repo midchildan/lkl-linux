@@ -56,7 +56,9 @@ define make_ns_symbols
 endef
 else
 LKL_ENTRY_POINTS := lkl_start_kernel lkl_sys_halt lkl_syscall lkl_trigger_irq \
-	lkl_get_free_irq lkl_put_irq lkl_is_running
+	lkl_get_free_irq lkl_put_irq lkl_is_running lkl__sync_synchronize \
+	lkl__sync_fetch_and_sub lkl__sync_fetch_and_or lkl__sync_fetch_and_and \
+	lkl__sync_fetch_and_add
 define make_ns_symbols
 	$(OBJCOPY) -R .eh_frame -R .syscall_defs $(foreach sym,$(LKL_ENTRY_POINTS),\
 	-G$(prefix)$(sym)) vmlinux lkl.o

@@ -47,6 +47,7 @@ LDFLAGS += -pie
 
 OUTPUT_FORMAT = $(shell $(LD) -r -print-output-format)
 OUTPUT_DEF = $(shell echo | $(CC) -dM -E -)
+export CONFIG_AUTO_LKL_JSON_CONF=y
 
 ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd elf32-littlearm elf64-littleaarch64))
   CFLAGS   += -fPIC
@@ -155,12 +156,15 @@ else
   export CONFIG_AUTO_LKL_VIRTIO_NET=y
   CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
   CFLAGS += -UCONFIG_AUTO_LKL_POSIX_HOST
-
+ifeq ($(CROSS_COMPILE),arm-none-eabi-)
+  CFLAGS += -Iinclude/arm-none-eabi
+endif
 # if rumprun=yes, then skip virtio-host build
 ifeq ($(rumprun),yes)
   CFLAGS += -DRUMPRUN
   export CONFIG_AUTO_LKL_VIRTIO=n
   export CONFIG_AUTO_LKL_VIRTIO_NET=n
+  export CONFIG_AUTO_LKL_JSON_CONF=n
 endif
 endif
 
@@ -197,6 +201,11 @@ $(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF) $(OUTPUT)liblkl-hijack-sy
 $(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)
 	$(Q)if ! [ -e $@ ]; then ln -s $< $@; fi
 
+# If there is no librumpclient_pic.a, skip sysproxy client build
+ifeq (,$(wildcard $(RUMP_CLIENT_DIR)/librumpclient_pic.a))
+  ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF), $(ALL_LIBRARIES))
+endif
+
 # because of argp and fuse, none of the binaries will compile on windows
 # because of libdl, liblkl-hijack will not compile on windows
 # arm-android neither for the moment
@@ -205,10 +214,6 @@ ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   install: headers_install libraries_install programs_install
 else ifneq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
   ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-  # If there is no librumpclient_pic.a, skip sysproxy client build
-  ifeq (,$(wildcard $(RUMP_CLIENT_DIR)/librumpclient_pic.a))
-    ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF), $(ALL_LIBRARIES))
-  endif
   all: $(ALL_LIBRARIES)
   install: headers_install libraries_install
 else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))

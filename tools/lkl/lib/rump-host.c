@@ -13,11 +13,10 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <stdlib.h>
-#include "endian.h"
 
 #include <unistd.h>
 #include <poll.h>
-#include <sys/uio.h>
+//#include <sys/uio.h>
 
 #ifndef RUMPRUN
 #include <thread.h>

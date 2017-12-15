@@ -21,10 +21,10 @@ lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += virtio_net_fd.o
 lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += virtio_net_tap.o
 lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += virtio_net_raw.o
 lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += virtio_net_macvtap.o
-lkl-$(CONFIG_AUTO_LKL_VIRTIO_NET_DPDK) += virtio_net_dpdk.o
-lkl-$(CONFIG_AUTO_LKL_VIRTIO_NET_VDE) += virtio_net_vde.o
+lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += virtio_net_dpdk.o
+lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += virtio_net_vde.o
 lkl-$(CONFIG_AUTO_LKL_POSIX_HOST) += virtio_net_pipe.o
-lkl-y += ../../perf/pmu-events/jsmn.o
+lkl-$(CONFIG_AUTO_LKL_JSON_CONF) += ../../perf/pmu-events/jsmn.o
 lkl-y += config.o
 
 # for frankenlibc

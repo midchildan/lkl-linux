@@ -1,5 +1,4 @@
 #include <lkl.h>
-#define CONFIG_AUTO_LKL_POSIX_HOST
 #include <lkl_host.h>
 #include "xlate.h"
 #include "client.h"
@@ -32,7 +31,7 @@ client_fini(void)
 
 long lkl_syscall(long no, long *params)
 {
-	register_t retval[2];
+	long retval[2];
 
 	rumpclient_syscall(no, params, sizeof(params)*6, retval);
 	return lkl_set_errno(retval[0]);

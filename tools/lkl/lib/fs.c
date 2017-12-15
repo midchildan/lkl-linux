@@ -213,7 +213,7 @@ long lkl_mount_dev(unsigned int disk_id, unsigned int part,
 		   const char *data, char *mnt_str, unsigned int mnt_str_len)
 {
 	char dev_str[] = { "/dev/xxxxxxxx" };
-	unsigned int dev;
+	uint32_t dev;
 	int err;
 	char _data[4096]; /* FIXME: PAGE_SIZE is not exported by LKL */
 
@@ -296,7 +296,7 @@ long lkl_umount_dev(unsigned int disk_id, unsigned int part, int flags,
 {
 	char dev_str[] = { "/dev/xxxxxxxx" };
 	char mnt_str[] = { "/mnt/xxxxxxxx" };
-	unsigned int dev;
+	uint32_t dev;
 	int err;
 
 	err = lkl_get_virtio_blkdev(disk_id, part, &dev);

@@ -25,7 +25,6 @@
 #include <sys/ioctl.h>
 #include <assert.h>
 #include <lkl.h>
-#define CONFIG_AUTO_LKL_POSIX_HOST
 #include <lkl_host.h>
 
 #include "xlate.h"

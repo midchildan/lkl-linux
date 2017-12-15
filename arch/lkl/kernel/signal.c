@@ -1,4 +1,5 @@
 #include <linux/sched.h>
+#include <linux/signal.h>
 
 static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 {
