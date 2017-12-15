@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  ioctl.c
  *
@@ -19,6 +20,7 @@
 #include <linux/highuid.h>
 #include <linux/vmalloc.h>
 #include <linux/sched.h>
+#include <linux/cred.h>
 
 #include <linux/uaccess.h>
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Conversion between 32-bit and 64-bit native system calls.
  *
@@ -64,15 +65,10 @@ SYSCALL_DEFINE6(32_mmap2, unsigned long, addr, unsigned long, len,
 	unsigned long, prot, unsigned long, flags, unsigned long, fd,
 	unsigned long, pgoff)
 {
-	unsigned long error;
-
-	error = -EINVAL;
 	if (pgoff & (~PAGE_MASK >> 12))
-		goto out;
-	error = sys_mmap_pgoff(addr, len, prot, flags, fd,
-			       pgoff >> (PAGE_SHIFT-12));
-out:
-	return error;
+		return -EINVAL;
+	return sys_mmap_pgoff(addr, len, prot, flags, fd,
+			      pgoff >> (PAGE_SHIFT-12));
 }
 
 #define RLIM_INFINITY32 0x7fffffff

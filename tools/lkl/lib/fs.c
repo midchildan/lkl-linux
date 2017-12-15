@@ -82,12 +82,13 @@ uint32_t __attribute__((weak)) virtio_get_num_bootdevs(void)
 	return 0;
 }
 
-static int encode_dev_from_sysfs(const char *sysfs_path, uint32_t *pdevid)
+int lkl_encode_dev_from_sysfs(const char *sysfs_path, uint32_t *pdevid)
 {
 	int ret;
 	long fd;
 	int major, minor;
 	char buf[16] = { 0, };
+	char *bufptr;
 
 	fd = lkl_sys_open(sysfs_path, LKL_O_RDONLY, 0);
 	if (fd < 0)
@@ -102,11 +103,16 @@ static int encode_dev_from_sysfs(const char *sysfs_path, uint32_t *pdevid)
 		goto out_close;
 	}
 
-	ret = sscanf(buf, "%d:%d", &major, &minor);
-	if (ret != 2) {
+	bufptr = strchr(buf, ':');
+	if (bufptr == NULL) {
 		ret = -LKL_EINVAL;
 		goto out_close;
 	}
+	bufptr[0] = '\0';
+	bufptr++;
+
+	major = atoi(buf);
+	minor = atoi(bufptr);
 
 	*pdevid = new_encode_dev(major, minor);
 	ret = 0;
@@ -199,7 +205,7 @@ int lkl_get_virtio_blkdev(int disk_id, unsigned int part, uint32_t *pdevid)
 	if (ret)
 		return ret;
 
-	return encode_dev_from_sysfs(sysfs_path, pdevid);
+	return lkl_encode_dev_from_sysfs(sysfs_path, pdevid);
 }
 
 long lkl_mount_dev(unsigned int disk_id, unsigned int part,
@@ -416,7 +422,7 @@ struct lkl_dir *lkl_fdopendir(int fd, int *err)
 
 void lkl_rewinddir(struct lkl_dir *dir)
 {
-	lkl_sys_lseek(dir->fd, 0, SEEK_SET);
+	lkl_sys_lseek(dir->fd, 0, LKL_SEEK_SET);
 	dir->len = 0;
 	dir->pos = NULL;
 }

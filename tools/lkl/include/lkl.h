@@ -19,6 +19,10 @@ extern "C" {
 #define strtok_r strtok_s
 #endif
 
+#if defined(__ANDROID__) && __LKL__BITS_PER_LONG == 32
+#define __lkl__NR_fcntl __lkl__NR_fcntl64
+#endif
+
 #if __LKL__BITS_PER_LONG == 64
 #define lkl_sys_stat lkl_sys_newstat
 #define lkl_sys_lstat lkl_sys_newlstat
@@ -126,6 +130,20 @@ int lkl_disk_add(struct lkl_disk *disk);
  * @disk - the host disk handle
  */
 int lkl_disk_remove(struct lkl_disk disk);
+
+/**
+ * lkl_get_virtiolkl_encode_dev_from_sysfs_blkdev - extract device id from sysfs
+ *
+ * This function returns the device id for the given sysfs dev node.
+ * The content of the node has to be in the form 'MAJOR:MINOR'.
+ * Also, this function expects an absolute path which means that sysfs
+ * already has to be mounted at the given path
+ *
+ * @sysfs_path - absolute path to the sysfs dev node
+ * @pdevid - pointer to memory where dev id will be returned
+ * @returns - 0 on success, a negative value on error
+ */
+int lkl_encode_dev_from_sysfs(const char *sysfs_path, uint32_t *pdevid);
 
 /**
  * lkl_get_virtio_blkdev - get device id of a disk (partition)
@@ -296,6 +314,18 @@ int lkl_if_set_ipv4(int ifindex, unsigned int addr, unsigned int netmask_len);
 int lkl_set_ipv4_gateway(unsigned int addr);
 
 /**
+ * lkl_if_set_ipv4_gateway - add an IPv4 default route in rule table
+ *
+ * @ifindex - the ifindex of the interface, used for tableid calculation
+ * @addr - 4-byte IP address of the interface
+ * @netmask_len - prefix length of the @addr
+ * @gw_addr - 4-byte IP address of the gateway
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_if_set_ipv4_gateway(int ifindex, unsigned int addr,
+		unsigned int netmask_len, unsigned int gw_addr);
+
+/**
  * lkl_if_set_ipv6 - set IPv6 address on interface
  * must be called after interface is up.
  *
@@ -313,6 +343,18 @@ int lkl_if_set_ipv6(int ifindex, void* addr, unsigned int netprefix_len);
  * @returns - return 0 if no error: otherwise negative value returns
  */
 int lkl_set_ipv6_gateway(void* addr);
+
+/**
+ * lkl_if_set_ipv6_gateway - add an IPv6 default route in rule table
+ *
+ * @ifindex - the ifindex of the interface, used for tableid calculation
+ * @addr - 16-byte IP address of the interface
+ * @netmask_len - prefix length of the @addr
+ * @gw_addr - 16-byte IP address of the gateway (i.e., struct in_addr)
+ * @returns - return 0 if no error: otherwise negative value returns
+ */
+int lkl_if_set_ipv6_gateway(int ifindex, void *addr,
+		unsigned int netmask_len, void *gw_addr);
 
 /**
  * lkl_ifname_to_ifindex - obtain ifindex of an interface by name
@@ -390,8 +432,11 @@ struct lkl_netdev *lkl_netdev_tap_create(const char *ifname, int offload);
  *
  * @ifname - interface name for the DPDK device. The name for DPDK device is
  * only used for an internal use.
+ * @offload - offload bits for the device
+ * @mac - mac address pointer of dpdk-ed device
  */
-struct lkl_netdev *lkl_netdev_dpdk_create(const char *ifname);
+struct lkl_netdev *lkl_netdev_dpdk_create(const char *ifname, int offload,
+					unsigned char *mac);
 
 /**
  * lkl_netdev_vde_create - create VDE net_device for the virtio net backend
@@ -419,6 +464,16 @@ struct lkl_netdev *lkl_netdev_raw_create(const char *ifname);
  */
 struct lkl_netdev *lkl_netdev_macvtap_create(const char *path, int offload);
 
+/**
+ * lkl_netdev_pipe_create - create pipe net_device for the virtio
+ * net backend
+ *
+ * @ifname - a file name for the rx and tx pipe device. need to be configured
+ * on host in advance. delimiter is "|". e.g. "rx_name|tx_name".
+ * @offload - offload bits for the device
+ */
+struct lkl_netdev *lkl_netdev_pipe_create(char *ifname, int offload);
+
 /*
  * lkl_register_dbg_handler- register a signal handler that loads a debug lib.
  *
@@ -428,7 +483,7 @@ struct lkl_netdev *lkl_netdev_macvtap_create(const char *path, int offload);
  * If you run the program from shell script, make sure you ignore SIGTSTP by
  * "trap '' TSTP" in the shell script.
  */
-void lkl_register_dbg_handler();
+void lkl_register_dbg_handler(void);
 
 /**
  * lkl_add_neighbor - add a permanent arp entry
@@ -463,6 +518,43 @@ int lkl_if_add_ip(int ifindex, int af, void *addr, unsigned int netprefix_len);
  * @netprefix_len - prefix length of the @addr
  */
 int lkl_if_del_ip(int ifindex, int af, void *addr, unsigned int netprefix_len);
+
+/**
+ * lkl_add_gateway - add a gateway
+ * @af - address family of the ip address. Must be LKL_AF_INET or LKL_AF_INET6
+ * @gwaddr - 4-byte IP address of the gateway (i.e., struct in_addr)
+ */
+int lkl_add_gateway(int af, void *gwaddr);
+
+/**
+ * XXX Should I use OIF selector?
+ * temporary table idx = ifindex * 2 + 0 <- ipv4
+ * temporary table idx = ifindex * 2 + 1 <- ipv6
+ */
+/**
+ * lkl_if_add_rule_from_addr - create an ip rule table with "from" selector
+ * @ifindex - the ifindex of the interface, used for table id calculation
+ * @af - address family of the ip address. Must be LKL_AF_INET or LKL_AF_INET6
+ * @saddr - network byte order ip address, "from" selector address of this rule
+ */
+int lkl_if_add_rule_from_saddr(int ifindex, int af, void *saddr);
+
+/**
+ * lkl_if_add_gateway - add gateway to rule table
+ * @ifindex - the ifindex of the interface, used for table id calculation
+ * @af - address family of the ip address. Must be LKL_AF_INET or LKL_AF_INET6
+ * @gwaddr - 4-byte IP address of the gateway (i.e., struct in_addr)
+ */
+int lkl_if_add_gateway(int ifindex, int af, void *gwaddr);
+
+/**
+ * lkl_if_add_linklocal - add linklocal route to rule table
+ * @ifindex - the ifindex of the interface, used for table id calculation
+ * @af - address family of the ip address. Must be LKL_AF_INET or LKL_AF_INET6
+ * @addr - ip address of the entry in network byte order
+ * @netprefix_len - prefix length of the @addr
+ */
+int lkl_if_add_linklocal(int ifindex, int af,  void *addr, int netprefix_len);
 
 /**
  * lkl_if_wait_ipv6_dad - wait for DAD to be done for a ipv6 address

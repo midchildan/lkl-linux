@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *    Copyright IBM Corp. 2004, 2011
  *    Author(s): Martin Schwidefsky <schwidefsky@de.ibm.com>,
@@ -12,11 +13,12 @@
 #include <linux/seq_file.h>
 #include <linux/proc_fs.h>
 #include <linux/profile.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/ftrace.h>
 #include <linux/errno.h>
 #include <linux/slab.h>
+#include <linux/init.h>
 #include <linux/cpu.h>
 #include <linux/irq.h>
 #include <asm/irq_regs.h>
@@ -104,7 +106,8 @@ void do_IRQ(struct pt_regs *regs, int irq)
 
 	old_regs = set_irq_regs(regs);
 	irq_enter();
-	if (S390_lowcore.int_clock >= S390_lowcore.clock_comparator)
+	if (tod_after_eq(S390_lowcore.int_clock,
+			 S390_lowcore.clock_comparator))
 		/* Serve timer interrupts first. */
 		clock_comparator_work();
 	generic_handle_irq(irq);

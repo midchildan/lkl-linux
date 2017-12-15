@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Serial port driver for the ETRAX 100LX chip
  *
@@ -12,7 +13,7 @@ static char *serial_version = "$Revision: 1.25 $";
 #include <linux/types.h>
 #include <linux/errno.h>
 #include <linux/signal.h>
-#include <linux/sched.h>
+#include <linux/sched/signal.h>
 #include <linux/timer.h>
 #include <linux/interrupt.h>
 #include <linux/tty.h>

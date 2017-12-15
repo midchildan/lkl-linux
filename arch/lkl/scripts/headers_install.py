@@ -129,6 +129,13 @@ args = parser.parse_args()
 find_headers("arch/lkl/include/uapi/asm/syscalls.h")
 headers.add("arch/lkl/include/uapi/asm/host_ops.h")
 
+if 'LKL_INSTALL_ADDITIONAL_HEADERS' in os.environ:
+    with open(os.environ['LKL_INSTALL_ADDITIONAL_HEADERS'], 'rU') as f:
+        for line in f.readlines():
+            line = line.split('#', 1)[0].strip()
+            if line != '':
+                headers.add(line)
+
 new_headers = set()
 
 for h in headers:
@@ -164,6 +171,8 @@ structs.add("iovec")
 p = re.compile("union\s+(\w+)\s*\{")
 find_symbols(p, unions)
 p = re.compile("static\s+__inline__(\s+\w+)+\s+(\w+)\([^)]*\)\s")
+find_symbols(p, defines)
+p = re.compile("static\s+__always_inline(\s+\w+)+\s+(\w+)\([^)]*\)\s")
 find_symbols(p, defines)
 p = re.compile("enum\s+(\w*)\s*{([^}]*)}", re.M|re.S)
 q = re.compile("(\w+)\s*(,|=[^,]*|$)", re.M|re.S)

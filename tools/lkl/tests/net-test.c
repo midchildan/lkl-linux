@@ -11,6 +11,9 @@
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#ifdef __ANDROID__
+#include <linux/icmp.h>
+#endif
 
 #include <lkl.h>
 #include <lkl_host.h>
@@ -135,14 +138,14 @@ static int test_net_init(int argc, char **argv)
 
 	if (iftype && ifname && (strncmp(iftype, "tap", 3) == 0))
 		nd = lkl_netdev_tap_create(ifname, 0);
-#ifdef CONFIG_AUTO_LKL_VIRTIO_NET_DPDK
 	else if (iftype && ifname && (strncmp(iftype, "dpdk", 4) == 0))
-		nd = lkl_netdev_dpdk_create(ifname);
-#endif /* CONFIG_AUTO_LKL_VIRTIO_NET_DPDK */
+		nd = lkl_netdev_dpdk_create(ifname, 0, NULL);
 	else if (iftype && ifname && (strncmp(iftype, "raw", 3) == 0))
 		nd = lkl_netdev_raw_create(ifname);
 	else if (iftype && ifname && (strncmp(iftype, "macvtap", 7) == 0))
 		nd = lkl_netdev_macvtap_create(ifname, 0);
+	else if (iftype && ifname && (strncmp(iftype, "pipe", 4) == 0))
+		nd = lkl_netdev_pipe_create(ifname, 0);
 
 	if (!nd) {
 		fprintf(stderr, "init netdev failed\n");

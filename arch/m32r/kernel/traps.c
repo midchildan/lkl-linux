@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/arch/m32r/kernel/traps.c
  *
@@ -14,7 +15,11 @@
 #include <linux/kallsyms.h>
 #include <linux/stddef.h>
 #include <linux/ptrace.h>
+#include <linux/sched/debug.h>
+#include <linux/sched/task_stack.h>
 #include <linux/mm.h>
+#include <linux/cpu.h>
+
 #include <asm/page.h>
 #include <asm/processor.h>
 
@@ -109,6 +114,15 @@ static void set_eit_vector_entries(void)
 #endif
 	_flush_cache_copyback_all();
 }
+
+void abort(void)
+{
+	BUG();
+
+	/* if that doesn't kill us, halt */
+	panic("Oops failed to kill thread");
+}
+EXPORT_SYMBOL(abort);
 
 void __init trap_init(void)
 {

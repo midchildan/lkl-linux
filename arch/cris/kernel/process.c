@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/arch/cris/kernel/process.c
  *
@@ -20,6 +21,7 @@
 #include <linux/spinlock.h>
 #include <linux/init_task.h>
 #include <linux/sched.h>
+#include <linux/sched/task.h>
 #include <linux/fs.h>
 #include <linux/user.h>
 #include <linux/elfcore.h>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Helper functions for trap handlers
  *
@@ -10,6 +11,8 @@
 
 #include <linux/ptrace.h>
 #include <linux/uaccess.h>
+#include <linux/sched/debug.h>
+
 #include <arch/sv_addr_ag.h>
 #include <arch/system.h>
 

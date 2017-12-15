@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # linux/arch/s390/boot/compressed/Makefile
 #
@@ -19,7 +20,8 @@ KBUILD_CFLAGS += $(call cc-option,-ffreestanding)
 GCOV_PROFILE := n
 UBSAN_SANITIZE := n
 
-OBJECTS := $(addprefix $(objtree)/arch/s390/kernel/, head.o sclp.o ebcdic.o als.o)
+OBJECTS := $(addprefix $(objtree)/arch/s390/kernel/, head.o ebcdic.o als.o)
+OBJECTS += $(objtree)/drivers/s390/char/sclp_early_core.o
 OBJECTS += $(obj)/head.o $(obj)/misc.o $(obj)/piggy.o
 
 LDFLAGS_vmlinux := --oformat $(LD_BFD) -e startup -T

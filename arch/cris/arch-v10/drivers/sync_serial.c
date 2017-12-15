@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Simple synchronous serial port driver for ETRAX 100LX.
  *
@@ -16,7 +17,7 @@
 #include <linux/types.h>
 #include <linux/errno.h>
 #include <linux/major.h>
-#include <linux/sched.h>
+#include <linux/sched/signal.h>
 #include <linux/interrupt.h>
 #include <linux/poll.h>
 #include <linux/init.h>

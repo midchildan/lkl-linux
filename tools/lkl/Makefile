@@ -40,13 +40,15 @@ export srctree
 # Target build configuration
 
 export CFLAGS += -I$(OUTPUT)/include -Iinclude -Wall -g -O2 -Wextra \
+	 -Wno-unused-parameter \
 	 -Wno-missing-field-initializers -fno-strict-aliasing \
-	 -Wno-unused-parameter -U_FORTIFY_SOURCE -fno-stack-protector
+	 -U_FORTIFY_SOURCE -fno-stack-protector
+LDFLAGS += -pie
 
 OUTPUT_FORMAT = $(shell $(LD) -r -print-output-format)
 OUTPUT_DEF = $(shell echo | $(CC) -dM -E -)
 
-ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd elf32-littlearm))
+ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd elf32-littlearm elf64-littleaarch64))
   CFLAGS   += -fPIC
   ifeq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
     CFLAGS   += -pthread
@@ -60,12 +62,17 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd e
   # Intel DPDK configuration
   ifeq ($(dpdk),yes)
     export CONFIG_AUTO_LKL_VIRTIO_NET_DPDK=y
-    RTE_SDK ?= $(shell pwd)/dpdk-2.2.0
+    RTE_SDK ?= $(shell pwd)/dpdk-17.02
     RTE_TARGET ?= build
+    DPDK_LIBS = -lrte_pmd_vmxnet3_uio -lrte_pmd_ixgbe -lrte_pmd_e1000
+    DPDK_LIBS += -lrte_pmd_virtio
+    DPDK_LIBS += -lrte_timer -lrte_hash -lrte_mbuf -lrte_ethdev -lrte_eal
+    DPDK_LIBS += -lrte_mempool -lrte_ring -lrte_pmd_ring
+    DPDK_LIBS += -lrte_kvargs -lrte_net
     CFLAGS += -I$(RTE_SDK)/$(RTE_TARGET)/include -msse4.2 -mpopcnt
     CFLAGS += -DCONFIG_AUTO_LKL_VIRTIO_NET_DPDK
     LDFLAGS +=-L$(RTE_SDK)/$(RTE_TARGET)/lib
-    LDFLAGS +=-Wl,--whole-archive -ldpdk -Wl,--no-whole-archive -lm -ldl
+    LDFLAGS +=-Wl,--whole-archive $(DPDK_LIBS) -Wl,--no-whole-archive -lm -ldl
   endif
   # Virtual Distributed Ethernet configuration
   ifeq ($(vde),yes)
@@ -81,7 +88,7 @@ else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386 pe-x86-64 ))
   export CONFIG_AUTO_LKL_NT_HOST=y
   export CONFIG_AUTO_LKL_VIRTIO=y
   export CONFIG_AUTO_LKL_VIRTIO_NET=n
-  CFLAGS += -DCONFIG_AUTO_LKL_NT_HOST
+  CFLAGS += -DCONFIG_AUTO_LKL_NT_HOST -Iinclude/mingw32
   ifneq (,$(filter $(OUTPUT_FORMAT),pe-x86-64))
       CFLAGS += -Wl,--enable-auto-image-base -Wl,--image-base -Wl,0x10000000 -Wl,--out-implib=$(OUTPUT)liblkl.dll.a -Wl,--export-all-symbols -Wl,--enable-auto-import
 	  LDFLAGS +=-Wl,--image-base -Wl,0x10000000 -Wl,--enable-auto-image-base -Wl,--out-implib=$(OUTPUT)liblkl.dll.a -Wl,--export-all-symbols -Wl,--enable-auto-import
@@ -115,6 +122,9 @@ $(OUTPUT)liblkl$(SOSUF): LDFLAGS += -shared
 $(OUTPUT)liblkl-hijack$(SOSUF): $(OUTPUT)lib/hijack/hijack-in.o $(OUTPUT)liblkl.a
 $(OUTPUT)liblkl-hijack$(SOSUF): LDFLAGS += -shared -nodefaultlibs
 $(OUTPUT)liblkl-hijack$(SOSUF): LDLIBS += -ldl
+ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
+  $(OUTPUT)liblkl-hijack$(SOSUF): LDLIBS += -lgcc -lc
+endif
 
 $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): $(OUTPUT)lib/hijack/hijack-sysproxy-in.o $(OUTPUT)/lib/net.o $(RUMP_CLIENT_DIR)/librumpclient_pic.a
 $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): LDFLAGS += -shared -nodefaultlibs
@@ -157,12 +167,15 @@ endif
 TEST_TARGETS        := test valgrind gdb
 
 $(OUTPUT)tests/boot: $(OUTPUT)tests/boot-in.o $(OUTPUT)liblkl.a
+ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
+  $(OUTPUT)tests/boot: LDLIBS += -lc
+endif
 $(OUTPUT)tests/net-test: $(OUTPUT)tests/net-test-in.o $(OUTPUT)liblkl.a
 $(TEST_TARGETS): $(OUTPUT)tests/boot $(OUTPUT)tests/net-test
 
 # because of libdl, liblkl-hijack will not compile on windows
 # fortunately, the test target will handle a missing libhijack.so correctly
-ifeq (,$(filter $(OUTPUT_FORMAT),pe-i386 elf32-littlearm))
+ifeq (,$(filter $(OUTPUT_FORMAT),pe-i386))
   test: liblkl-hijack$(SOSUF)
 endif
 
@@ -171,7 +184,9 @@ $(OUTPUT)%-in.o: $(OUTPUT)lib/lkl.o FORCE
 
 $(OUTPUT)lib/lkl.o:
 	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) defconfig
-	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(OUTPUT)
+# this workaround is for arm32 linker (ld.gold)
+	$(Q)export PATH=$(srctree)/tools/lkl/bin/:${PATH} ;\
+	$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(OUTPUT)
 
 $(OUTPUT)liblkl.a: $(OUTPUT)lib/lkl-in.o $(OUTPUT)lib/lkl.o
 	$(QUIET_AR)$(AR) -rc $@ $^
@@ -196,8 +211,8 @@ else ifneq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
   endif
   all: $(ALL_LIBRARIES)
   install: headers_install libraries_install
-else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
-  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
+else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
+  all: $(ALL_LIBRARIES)
   install: headers_install libraries_install programs_install
 else
   ALL_LIBRARIES := $(ALL_LIBRARIES) $(OUTPUT)liblkl-hijack$(SOSUF)

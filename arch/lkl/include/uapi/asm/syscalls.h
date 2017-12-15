@@ -122,6 +122,7 @@ struct sockaddr {
 #include <linux/netlink.h>
 #include <linux/neighbour.h>
 #include <linux/rtnetlink.h>
+#include <linux/fib_rules.h>
 
 #include <linux/kdev_t.h>
 #include <asm/irq.h>
@@ -168,6 +169,8 @@ struct ustat {
 	char			f_fname[6];
 	char			f_fpack[6];
 };
+
+typedef __kernel_rwf_t		rwf_t;
 
 #define AF_UNSPEC       0
 #define AF_UNIX         1

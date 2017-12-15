@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #include <linux/gfp.h>
 #include <linux/types.h>
 #include <linux/radix-tree.h>
@@ -34,6 +35,9 @@ void tag_check(void);
 void multiorder_checks(void);
 void iteration_test(unsigned order, unsigned duration);
 void benchmark(void);
+void idr_checks(void);
+void ida_checks(void);
+void ida_thread_tests(void);
 
 struct item *
 item_tag_set(struct radix_tree_root *root, unsigned long index, int tag);

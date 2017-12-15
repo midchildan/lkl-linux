@@ -11,7 +11,7 @@
 #define __access_ok(addr, size) (1)
 
 /* handle rump remote client */
-static inline __must_check long __copy_from_user(void *to,
+static inline __must_check long raw_copy_from_user(void *to,
 		const void __user *from, unsigned long n)
 {
 	int error = 0;
@@ -30,9 +30,8 @@ static inline __must_check long __copy_from_user(void *to,
 
 	return error;
 }
-#define __copy_from_user(to, from, n) __copy_from_user(to, from, n)
 
-static inline __must_check long __copy_to_user(void __user *to,
+static inline __must_check long raw_copy_to_user(void __user *to,
 		const void *from, unsigned long n)
 {
 	int error = 0;
@@ -51,7 +50,6 @@ static inline __must_check long __copy_to_user(void __user *to,
 
 	return error;
 }
-#define __copy_to_user(to, from, n) __copy_to_user(to, from, n)
 
 #include <asm-generic/uaccess.h>
 
