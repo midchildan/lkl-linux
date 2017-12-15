@@ -362,23 +362,10 @@ static void *rump_timer_helper(void *arg)
 			break;
 
 		list_for_each_entry_safe(td2, tmp, &pending_timer, list) {
-#ifdef RUMPRUN
 			td2->thrid = bmk_sched_create(
 				"timer", NULL, 0,
 				(void (*)(void *))rump_timer_trampoline,
 				td2, NULL, 0);
-#else
-			/* XXX: not in use
-			 * reused stack will avoid mmap(2) in create_thread
-			 * and reduce context switch, but can't do now coz
-			 * multiple timer.  stack pool ?
-			 */
-			td2->thrid =
-				create_thread("timer", NULL,
-					      (void (*)(void *))
-					      rump_timer_trampoline,
-					      td2, NULL, 0, 0);
-#endif
 			list_del(&td2->list);
 		}
 	}
@@ -435,17 +422,23 @@ restart:
 
 		td2.f = td->f;
 		td2.arg = td->arg;
+
+#ifdef FIXME
 		/* use reused stack to avoid mmap(2) in create_thread */
-#ifdef RUMPRUN
-		td2.thrid = bmk_sched_create(
-			"timer", NULL, 0,
-			(void (*)(void *))rump_timer_trampoline,
-			&td2, stack, STACKSIZE);
-#else
 		td2.thrid =
 			create_thread("timer", NULL,
 				      (void (*)(void *))rump_timer_trampoline,
 				      &td2, stack, STACKSIZE, 0);
+#else
+		/* XXX: not in use
+		 * reused stack will avoid mmap(2) in create_thread
+		 * and reduce context switch, but can't do now coz
+		 * multiple timer.  stack pool ?
+		 */
+		td2.thrid =
+			create_thread("timer", NULL,
+				      (void (*)(void *))rump_timer_trampoline,
+				      &td2, NULL, 0, 0);
 #endif
 	}
 
