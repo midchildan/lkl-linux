@@ -1,6 +1,6 @@
-hijack-y += hijack.o
-hijack-y += init.o
-hijack-y += xlate.o
+liblkl-hijack-y += hijack.o
+liblkl-hijack-y += init.o
+liblkl-hijack-y += xlate.o
 
 hijack-sysproxy-y += hijack.o
 hijack-sysproxy-y += xlate.o

@@ -2,31 +2,23 @@
 # (this improves performance and avoids hard-to-debug behaviour);
 # also do not print "Entering directory..." messages from make
 .SUFFIXES:
-MAKEFLAGS += -r --no-print-directory 
-
-ifeq ($(V),1)
-  Q =
-else
-  Q = @
-endif
-
-OUTPUT_FORMAT=$(shell $(LD) -r -print-output-format)
+MAKEFLAGS += -r --no-print-directory
 RUMP_PREFIX?=
 RUMP_INCLUDE?=$(RUMP_PREFIX)/
-# default target
-all:
 
--include ../scripts/Makefile.include
+ifneq ($(silent),1)
+  ifneq ($(V),1)
+	QUIET_AUTOCONF       = @echo '  AUTOCONF '$@;
+	Q = @
+  endif
+endif
 
-# By default we want to use gcc (as does Linux), especially as the clang
-# cross toolchain does not use prefixed names
-CC    := $(CROSS_COMPILE)gcc
-LD    := $(CROSS_COMPILE)$(LD)
-AR    := $(CROSS_COMPILE)ar
-export CC LD AR
-
-EXESUF   := 
-SOSUF    := .so
+ifneq ($(OUTPUT),)
+  OUTPUT := $(OUTPUT)/tools/lkl/
+else
+  OUTPUT := $(CURDIR)/
+endif
+export OUTPUT
 
 PREFIX   := /usr
 
@@ -36,114 +28,40 @@ ifeq (,$(srctree))
 endif
 export srctree
 
+-include ../scripts/Makefile.include
 
-# Target build configuration
+all:
+
+conf: $(OUTPUT)Makefile.conf
+
+$(OUTPUT)Makefile.conf: Makefile.autoconf
+	$(call QUIET_AUTOCONF, headers)$(MAKE) -f Makefile.autoconf -s
+
+-include $(OUTPUT)Makefile.conf
 
 export CFLAGS += -I$(OUTPUT)/include -Iinclude -Wall -g -O2 -Wextra \
 	 -Wno-unused-parameter \
 	 -Wno-missing-field-initializers -fno-strict-aliasing \
 	 -U_FORTIFY_SOURCE -fno-stack-protector
-LDFLAGS += -pie
-
-OUTPUT_FORMAT = $(shell $(LD) -r -print-output-format)
-OUTPUT_DEF = $(shell echo | $(CC) -dM -E -)
 export CONFIG_AUTO_LKL_JSON_CONF=y
 
-ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd elf32-littlearm elf64-littleaarch64))
-  CFLAGS   += -fPIC
-  ifeq (,$(filter $(OUTPUT_DEF),__ANDROID__ __ARMEL__))
-    CFLAGS   += -pthread
-    LDLIBS   += -lrt -lpthread
-  endif
-  export CONFIG_AUTO_LKL_POSIX_HOST=y
-  export CONFIG_AUTO_LKL_VIRTIO=y
-  export CONFIG_AUTO_LKL_VIRTIO_NET=y
-  CFLAGS += -DCONFIG_AUTO_LKL_POSIX_HOST
+-include Targets
 
-  # Intel DPDK configuration
-  ifeq ($(dpdk),yes)
-    export CONFIG_AUTO_LKL_VIRTIO_NET_DPDK=y
-    RTE_SDK ?= $(shell pwd)/dpdk-17.02
-    RTE_TARGET ?= build
-    DPDK_LIBS = -lrte_pmd_vmxnet3_uio -lrte_pmd_ixgbe -lrte_pmd_e1000
-    DPDK_LIBS += -lrte_pmd_virtio
-    DPDK_LIBS += -lrte_timer -lrte_hash -lrte_mbuf -lrte_ethdev -lrte_eal
-    DPDK_LIBS += -lrte_mempool -lrte_ring -lrte_pmd_ring
-    DPDK_LIBS += -lrte_kvargs -lrte_net
-    CFLAGS += -I$(RTE_SDK)/$(RTE_TARGET)/include -msse4.2 -mpopcnt
-    CFLAGS += -DCONFIG_AUTO_LKL_VIRTIO_NET_DPDK
-    LDFLAGS +=-L$(RTE_SDK)/$(RTE_TARGET)/lib
-    LDFLAGS +=-Wl,--whole-archive $(DPDK_LIBS) -Wl,--no-whole-archive -lm -ldl
-  endif
-  # Virtual Distributed Ethernet configuration
-  ifeq ($(vde),yes)
-    export CONFIG_AUTO_LKL_VIRTIO_NET_VDE=y
-    CFLAGS     += -DCONFIG_AUTO_LKL_VIRTIO_NET_VDE
-    LDLIBS     += $(shell pkg-config --libs vdeplug)
-  endif
-else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386 pe-x86-64 ))
-  KOPT      = "KALLSYMS_EXTRA_PASS=1"
-  LDLIBS   += -lws2_32
-  EXESUF   := .exe
-  SOSUF    := .dll
-  export CONFIG_AUTO_LKL_NT_HOST=y
-  export CONFIG_AUTO_LKL_VIRTIO=y
-  export CONFIG_AUTO_LKL_VIRTIO_NET=n
-  CFLAGS += -DCONFIG_AUTO_LKL_NT_HOST -Iinclude/mingw32
-  ifneq (,$(filter $(OUTPUT_FORMAT),pe-x86-64))
-      CFLAGS += -Wl,--enable-auto-image-base -Wl,--image-base -Wl,0x10000000 -Wl,--out-implib=$(OUTPUT)liblkl.dll.a -Wl,--export-all-symbols -Wl,--enable-auto-import
-	  LDFLAGS +=-Wl,--image-base -Wl,0x10000000 -Wl,--enable-auto-image-base -Wl,--out-implib=$(OUTPUT)liblkl.dll.a -Wl,--export-all-symbols -Wl,--enable-auto-import
-  endif
+TARGETS := $(progs-y:%=$(OUTPUT)%$(EXESUF))
+TARGETS += $(libs-y:%=$(OUTPUT)%$(SOSUF))
+all: $(TARGETS)
+
+# this workaround is for FreeBSD
+bin/stat:
+ifeq ($(LKL_HOST_CONFIG_BSD),y)
+	$(Q)ln -sf `which gnustat` bin/stat
 else
-  $(error Unrecognized platform: $(OUTPUT_FORMAT))
-endif
-
-ifneq ($(OUTPUT),)
-OUTPUT := $(OUTPUT)/tools/lkl/
-else
-OUTPUT := $(CURDIR)/
-endif
-export OUTPUT
-
-ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386 pe-x86-64 ))
-ALL_PROGRAMS :=
-ALL_LIBRARIES := $(OUTPUT)liblkl.a $(OUTPUT)liblkl$(SOSUF)
-else
-ALL_PROGRAMS := $(OUTPUT)lklfuse$(EXESUF) $(OUTPUT)cptofs$(EXESUF) $(OUTPUT)cpfromfs$(EXESUF) $(OUTPUT)fs2tar$(EXESUF)
-ALL_LIBRARIES := $(OUTPUT)liblkl.a $(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF) $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF)
-endif
-
-static: $(OUTPUT)liblkl.a
-shared: $(OUTPUT)liblkl$(SOSUF)
-hijack: $(OUTPUT)liblkl-hijack$(SOSUF)
-
-$(OUTPUT)liblkl$(SOSUF): $(OUTPUT)lib/lkl-in.o $(OUTPUT)lib/lkl.o
-$(OUTPUT)liblkl$(SOSUF): LDFLAGS += -shared
-
-$(OUTPUT)liblkl-hijack$(SOSUF): $(OUTPUT)lib/hijack/hijack-in.o $(OUTPUT)liblkl.a
-$(OUTPUT)liblkl-hijack$(SOSUF): LDFLAGS += -shared -nodefaultlibs
-$(OUTPUT)liblkl-hijack$(SOSUF): LDLIBS += -ldl
-ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
-  $(OUTPUT)liblkl-hijack$(SOSUF): LDLIBS += -lgcc -lc
+	$(Q)touch bin/stat
 endif
 
 $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): $(OUTPUT)lib/hijack/hijack-sysproxy-in.o $(OUTPUT)/lib/net.o $(RUMP_CLIENT_DIR)/librumpclient_pic.a
 $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): LDFLAGS += -shared -nodefaultlibs
 $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): LDLIBS += -ldl $(RUMP_CLIENT_DIR)/librumpclient_pic.a
-
-$(OUTPUT)lklfuse$(EXESUF): $(OUTPUT)lklfuse-in.o $(OUTPUT)liblkl.a
-$(OUTPUT)lklfuse$(EXESUF): LDLIBS += -lfuse
-
-$(OUTPUT)fs2tar$(EXESUF): $(OUTPUT)fs2tar-in.o $(OUTPUT)liblkl.a
-$(OUTPUT)fs2tar$(EXESUF): LDLIBS += -larchive
-ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd pe-x86-64))
-  $(OUTPUT)fs2tar$(EXESUF): LDLIBS += -largp
-endif
-
-$(OUTPUT)cptofs$(EXESUF): $(OUTPUT)cptofs-in.o $(OUTPUT)liblkl.a
-ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64-freebsd))
-  $(OUTPUT)cptofs$(EXESUF): LDLIBS += -largp
-endif
 
 # if there is no rumpuser.h, then skip build
 ifeq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
@@ -168,35 +86,31 @@ ifeq ($(rumprun),yes)
 endif
 endif
 
-TEST_TARGETS        := test valgrind gdb
-
-$(OUTPUT)tests/boot: $(OUTPUT)tests/boot-in.o $(OUTPUT)liblkl.a
-ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
-  $(OUTPUT)tests/boot: LDLIBS += -lc
-endif
-$(OUTPUT)tests/net-test: $(OUTPUT)tests/net-test-in.o $(OUTPUT)liblkl.a
-$(TEST_TARGETS): $(OUTPUT)tests/boot $(OUTPUT)tests/net-test
-
-# because of libdl, liblkl-hijack will not compile on windows
-# fortunately, the test target will handle a missing libhijack.so correctly
-ifeq (,$(filter $(OUTPUT_FORMAT),pe-i386))
-  test: liblkl-hijack$(SOSUF)
-endif
-
-$(OUTPUT)%-in.o: $(OUTPUT)lib/lkl.o FORCE
-	$(Q)$(MAKE) -f $(srctree)/tools/build/Makefile.build dir=$(patsubst %/,%,$(dir $*)) obj=$(notdir $*)
-
-$(OUTPUT)lib/lkl.o:
+# rule to build lkl.o
+$(OUTPUT)lib/lkl.o: bin/stat
 	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) defconfig
 # this workaround is for arm32 linker (ld.gold)
 	$(Q)export PATH=$(srctree)/tools/lkl/bin/:${PATH} ;\
 	$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(OUTPUT)
 
-$(OUTPUT)liblkl.a: $(OUTPUT)lib/lkl-in.o $(OUTPUT)lib/lkl.o
+# rules to link libs
+$(OUTPUT)%$(SOSUF): LDFLAGS += -shared
+$(OUTPUT)%$(SOSUF): $(OUTPUT)%-in.o $(OUTPUT)liblkl.a
+	$(QUIET_LINK)$(CC) $(LDFLAGS) $(LDFLAGS_$*-y) -o $@ $^ $(LDLIBS) $(LDLIBS_$*-y)
+
+# liblkl is special
+$(OUTPUT)liblkl$(SOSUF): $(OUTPUT)%-in.o $(OUTPUT)lib/lkl.o
+$(OUTPUT)liblkl.a: $(OUTPUT)lib/liblkl-in.o $(OUTPUT)lib/lkl.o
 	$(QUIET_AR)$(AR) -rc $@ $^
 
-$(OUTPUT)liblkl$(SOSUF) $(OUTPUT)liblkl-hijack$(SOSUF) $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF) $(OUTPUT)lklfuse$(EXESUF) $(OUTPUT)fs2tar$(EXESUF) $(OUTPUT)cptofs$(EXESUF) $(OUTPUT)tests/boot $(OUTPUT)tests/net-test:
-	$(QUIET_LINK)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+# rule to link programs
+$(OUTPUT)%$(EXESUF): $(OUTPUT)%-in.o $(OUTPUT)liblkl.a
+	$(QUIET_LINK)$(CC) $(LDFLAGS) $(LDFLAGS_$*-y) -o $@ $^ $(LDLIBS) $(LDLIBS_$*-y)
+
+# rule to build objects
+$(OUTPUT)%-in.o: $(OUTPUT)lib/lkl.o FORCE
+	$(Q)$(MAKE) -f $(srctree)/tools/build/Makefile.build dir=$(patsubst %/,%,$(dir $*)) obj=$(notdir $*)
+
 
 $(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)
 	$(Q)if ! [ -e $@ ]; then ln -s $< $@; fi
@@ -206,37 +120,21 @@ ifeq (,$(wildcard $(RUMP_CLIENT_DIR)/librumpclient_pic.a))
   ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF), $(ALL_LIBRARIES))
 endif
 
-# because of argp and fuse, none of the binaries will compile on windows
-# because of libdl, liblkl-hijack will not compile on windows
-# arm-android neither for the moment
-ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386))
-  all: $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-  install: headers_install libraries_install programs_install
-else ifneq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
+ifneq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
   ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
   all: $(ALL_LIBRARIES)
   install: headers_install libraries_install
-else ifneq (,$(filter $(OUTPUT_DEF),__ANDROID__))
-  all: $(ALL_LIBRARIES)
-  install: headers_install libraries_install programs_install
-else
-  ALL_LIBRARIES := $(ALL_LIBRARIES) $(OUTPUT)liblkl-hijack$(SOSUF)
-  all: $(ALL_PROGRAMS) $(ALL_LIBRARIES)
-  install: headers_install libraries_install programs_install
 endif
 
 clean:
 	$(call QUIET_CLEAN, objects)find $(OUTPUT) -name '*.o' -delete -o -name '\.*.cmd'\
 	 -delete -o -name '\.*.d' -delete
 	$(call QUIET_CLEAN, headers)$(RM) -r $(OUTPUT)/include/lkl/
-	$(call QUIET_CLEAN, "host libraries")$(RM) $(OUTPUT)/liblkl.a liblkl$(SOSUF)
-	$(call QUIET_CLEAN, "hijack library")$(RM) $(OUTPUT)/liblkl-hijack$(SOSUF)
-	$(call QUIET_CLEAN, programs)$(RM) $(ALL_PROGRAMS)
-	$(call QUIET_CLEAN, tests)$(RM) tests/boot tests/net-test
+	$(call QUIET_CLEAN, liblkl.a)$(RM) $(OUTPUT)/liblkl.a
+	$(call QUIET_CLEAN, targets)$(RM) $(TARGETS) bin/stat
 
-$(TEST_TARGETS):
-	$(MAKE) -C tests $@
-
+clean-conf: clean
+	$(call QUIET_CLEAN, Makefile.conf)$(RM) $(OUTPUT)/Makefile.conf
 
 headers_install:
 	$(call QUIET_INSTALL, headers) \
@@ -254,7 +152,15 @@ programs_install: $(ALL_PROGRAMS)
 	    install -d $(DESTDIR)$(PREFIX)/bin ; \
 	    install -m 755 $(ALL_PROGRAMS) $(DESTDIR)$(PREFIX)/bin
 
+install: headers_install libraries_install programs_install
+
+
+run-tests:
+	./tests/run.py $(tests)
+
 FORCE: ;
-.PHONY: all clean $(TEST_TARGETS) FORCE
+.PHONY: all clean FORCE run-tests
 .PHONY: headers_install libraries_install programs_install install
 .NOTPARALLEL : lib/lkl.o
+.SECONDARY:
+

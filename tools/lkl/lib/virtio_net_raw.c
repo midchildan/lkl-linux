@@ -13,9 +13,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <net/if.h>
+#include <arpa/inet.h>
+#ifdef __linux__
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
-#include <arpa/inet.h>
+#elif __FreeBSD__
+#include <netinet/in.h>
+#endif
 #include <fcntl.h>
 
 #include "virtio.h"
@@ -28,23 +32,49 @@
 
 struct lkl_netdev *lkl_netdev_raw_create(const char *ifname)
 {
+#ifdef __linux__
 	int ret;
-	struct sockaddr_ll ll;
-	int fd, fd_flags, val;
+	int ifindex =  if_nametoindex(ifname);
+	struct sockaddr_ll ll = {
+		.sll_family = PF_PACKET,
+		.sll_ifindex = ifindex,
+		.sll_protocol = htons(ETH_P_ALL),
+	};
+	struct packet_mreq mreq = {
+		.mr_type = PACKET_MR_PROMISC,
+		.mr_ifindex = ifindex,
+	};
+#endif
+	int fd, fd_flags;
+#ifdef __linux__
+	int val;
+
+	if (ifindex < 0) {
+		perror("if_nametoindex");
+		return NULL;
+	}
 
 	fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+#elif __FreeBSD__
+	fd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+#endif
 	if (fd < 0) {
 		perror("socket");
 		return NULL;
 	}
 
-	memset(&ll, 0, sizeof(ll));
-	ll.sll_family = PF_PACKET;
-	ll.sll_ifindex = if_nametoindex(ifname);
-	ll.sll_protocol = htons(ETH_P_ALL);
+#ifdef __linux__
 	ret = bind(fd, (struct sockaddr *)&ll, sizeof(ll));
 	if (ret) {
 		perror("bind");
+		close(fd);
+		return NULL;
+	}
+
+	ret = setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mreq,
+			sizeof(mreq));
+	if (ret) {
+		perror("PACKET_ADD_MEMBERSHIP PACKET_MR_PROMISC");
 		close(fd);
 		return NULL;
 	}
@@ -54,6 +84,7 @@ struct lkl_netdev *lkl_netdev_raw_create(const char *ifname)
 			 sizeof(val));
 	if (ret)
 		perror("PACKET_QDISC_BYPASS, ignoring");
+#endif
 
 	fd_flags = fcntl(fd, F_GETFD, NULL);
 	fcntl(fd, F_SETFL, fd_flags | O_NONBLOCK);

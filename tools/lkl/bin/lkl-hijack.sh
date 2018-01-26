@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 ##
 ## This wrapper script works to replace system calls symbols such as
@@ -14,7 +14,7 @@
 
 script_dir=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
 
-export LD_LIBRARY_PATH=${script_dir}/../
+export LD_LIBRARY_PATH=${script_dir}/../lib/hijack
 if [ -n ${LKL_HIJACK_DEBUG+x}  ]
 then
   trap '' TSTP

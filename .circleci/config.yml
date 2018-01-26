@@ -25,7 +25,12 @@ do_steps: &do_steps
       key: code-tree-shallow-{{ epoch }}
       paths:
         - /home/ubuntu/project/.git
-  - run: cd tools/lkl && make clean
+  - run:
+      name: clean
+      command: |
+        make mrproper
+        cd tools/lkl && make clean-conf
+        rm -rf ~/junit
   - run: mkdir -p /home/ubuntu/.ccache
   - restore_cache:
       key: compiler-cache-{{ checksum "~/_cross_compile" }}
@@ -43,10 +48,12 @@ do_steps: &do_steps
           sudo cp tools/lkl/bin/i686-w64-mingw32-* /usr/bin;
         fi
   - run:
-      name: start android emulator
+      name: start emulator
       command: |
         if [[ $CROSS_COMPILE == *android* ]]; then
           emulator -avd Nexus5_API24 -no-window -no-audio -no-boot-anim;
+        elif [[ $CROSS_COMPILE == *freebsd* ]]; then
+          cd /home/ubuntu && $QEMU
         fi
       background: true
   - run: cd tools/lkl && make -j8 ${MKARG}
@@ -55,19 +62,29 @@ do_steps: &do_steps
        - /home/ubuntu/.ccache
      key: compiler-cache-{{ checksum "~/_cross_compile" }}-{{ epoch }}
   - run:
-      name: wait android emulator to boot
+      name: wait emulator to boot
       command: |
         if [[ $CROSS_COMPILE == *android* ]]; then
           /home/ubuntu/circle-android.sh wait-for-boot;
+        elif [[ $CROSS_COMPILE == *freebsd* ]]; then
+          while ! $MYSSH -o ConnectTimeout=1 exit 2> /dev/null
+          do
+             sleep 5
+          done
         fi
-  - run: cd tools/lkl && make test
-  - run: if [ $VALGRIND = 1]; then cd tools/lkl && make valgrind; fi
   - run:
-      name: save test results
+      name: run tests
       command: |
-        mkdir -p ~/junit/
-        find ./tools/lkl/ -type f -name "*.xml" -exec cp {} ~/junit/ \;
-      when: always
+        mkdir -p ~/junit
+        make -C tools/lkl run-tests tests="--junit-dir ~/junit"
+        # convert valgrind test results
+        if [[ -n "$VALGRIND" ]]; then
+          cd ./tools/lkl/ && find ./ -type f -name "valgrind-*.xml" \
+             -exec ./tests/valgrind2xunit.py {} \;
+          cd ../..
+        fi
+        find ./tools/lkl/ -type f -name "*.xml" -exec mv {} ~/junit/ \;
+      no_output_timeout: "90m"
   - store_test_results:
       path: ~/junit
   - store_artifacts:
@@ -77,54 +94,56 @@ do_steps: &do_steps
 jobs:
   x86_64:
    docker:
-     - image: lkldocker/circleci-x86_64:0.1
+     - image: lkldocker/circleci-x86_64:0.5
    environment:
      CROSS_COMPILE: ""
      MKARG: "dpdk=yes"
-     LKL_TEST_DHCP: 1
    <<: *do_steps
 
   mingw32:
    docker:
-     - image: lkldocker/circleci-mingw:0.1
+     - image: lkldocker/circleci-mingw:0.3
    environment:
      CROSS_COMPILE: "i686-w64-mingw32-"
-     LKL_TEST_DHCP: 1
    <<: *do_steps
 
   android-arm32:
    docker:
-     - image: lkldocker/circleci-android-arm32:0.1
+     - image: lkldocker/circleci-android-arm32:0.3
    environment:
      CROSS_COMPILE: "arm-linux-androideabi-"
-     LKL_TEST_DHCP: 1
      LKL_ANDROID_TEST: 1
      ANDROID_SDK_ROOT: /home/ubuntu/android-sdk
    <<: *do_steps
 
   android-aarch64:
    docker:
-     - image: lkldocker/circleci-android-arm64:0.1
+     - image: lkldocker/circleci-android-arm64:0.3
    environment:
      CROSS_COMPILE: "aarch64-linux-android-"
-     LKL_TEST_DHCP: 1
      LKL_ANDROID_TEST: 1
      ANDROID_SDK_ROOT: /home/ubuntu/android-sdk
    <<: *do_steps
 
+  freebsd11_x86_64:
+   docker:
+     - image: lkldocker/circleci-freebsd11-x86_64:0.1
+   environment:
+     CROSS_COMPILE: "x86_64-pc-freebsd11-"
+   <<: *do_steps
+
   x86_64_valgrind:
    docker:
-     - image: lkldocker/circleci-x86_64:0.1
+     - image: lkldocker/circleci-x86_64:0.5
    environment:
      CROSS_COMPILE: ""
      MKARG: "dpdk=yes"
-     LKL_TEST_DHCP: 1
      VALGRIND: 1
    <<: *do_steps
 
   checkpatch:
    docker:
-     - image: lkldocker/circleci:0.1
+     - image: lkldocker/circleci:0.3
    environment:
    steps:
      - restore_cache:
@@ -145,4 +164,15 @@ workflows:
      - mingw32
      - android-arm32
      - android-aarch64
+     - freebsd11_x86_64
      - checkpatch
+  nightly:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - x86_64_valgrind
