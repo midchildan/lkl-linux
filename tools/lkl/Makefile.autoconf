@@ -90,6 +90,7 @@ define rump_host
   CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
   SOSUF := .so
 
+  $(if $(filter $(1),elf64-x86-64-freebsd),$(call bsd_host))
   # if rumprun=yes, then skip virtio-host and json build
   $(if $(filter $(rumprun),yes),
     CFLAGS += -DRUMPRUN
@@ -114,7 +115,7 @@ define do_autoconf
   $(eval CC := $(CROSS_COMPILE)gcc)
   $(eval LD_FMT := $(shell $(LD) -r -print-output-format))
   $(if $(strip $(call find_include,rump/rumpuser.h)),\
-       $(call rump_host),
+       $(call rump_host,$(LD_FMT)),
   $(if $(filter $(LD_FMT),$(POSIX_HOSTS)),$(call posix_host,$(LD_FMT)))
   $(if $(filter $(LD_FMT),$(NT_HOSTS)),$(call nt_host,$(LD_FMT)))
   )
