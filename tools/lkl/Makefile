@@ -5,6 +5,7 @@
 MAKEFLAGS += -r --no-print-directory
 RUMP_PREFIX?=
 RUMP_INCLUDE?=$(RUMP_PREFIX)/
+export RUMP_INCLUDE
 
 ifneq ($(silent),1)
   ifneq ($(V),1)
@@ -43,7 +44,6 @@ export CFLAGS += -I$(OUTPUT)/include -Iinclude -Wall -g -O2 -Wextra \
 	 -Wno-unused-parameter \
 	 -Wno-missing-field-initializers -fno-strict-aliasing \
 	 -U_FORTIFY_SOURCE -fno-stack-protector
-export CONFIG_AUTO_LKL_JSON_CONF=y
 
 -include Targets
 
@@ -57,33 +57,6 @@ ifeq ($(LKL_HOST_CONFIG_BSD),y)
 	$(Q)ln -sf `which gnustat` bin/stat
 else
 	$(Q)touch bin/stat
-endif
-
-$(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): $(OUTPUT)lib/hijack/hijack-sysproxy-in.o $(OUTPUT)/lib/net.o $(RUMP_CLIENT_DIR)/librumpclient_pic.a
-$(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): LDFLAGS += -shared -nodefaultlibs
-$(OUTPUT)liblkl-hijack-sysproxy$(SOSUF): LDLIBS += -ldl $(RUMP_CLIENT_DIR)/librumpclient_pic.a
-
-# if there is no rumpuser.h, then skip build
-ifeq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
-else
-  buildrump=yes
-  KOPT+="buildrump="$(buildrump)
-  export CONFIG_AUTO_LKL_RUMP_HOST=y
-  export CONFIG_AUTO_LKL_POSIX_HOST=n
-  export CONFIG_AUTO_LKL_VIRTIO=y
-  export CONFIG_AUTO_LKL_VIRTIO_NET=y
-  CFLAGS += -I$(RUMP_INCLUDE) -DRUMPUSER -DLIBRUMPUSER -D_KERNEL
-  CFLAGS += -UCONFIG_AUTO_LKL_POSIX_HOST
-ifeq ($(CROSS_COMPILE),arm-none-eabi-)
-  CFLAGS += -Iinclude/arm-none-eabi
-endif
-# if rumprun=yes, then skip virtio-host build
-ifeq ($(rumprun),yes)
-  CFLAGS += -DRUMPRUN
-  export CONFIG_AUTO_LKL_VIRTIO=n
-  export CONFIG_AUTO_LKL_VIRTIO_NET=n
-  export CONFIG_AUTO_LKL_JSON_CONF=n
-endif
 endif
 
 # rule to build lkl.o
@@ -114,17 +87,6 @@ $(OUTPUT)%-in.o: $(OUTPUT)lib/lkl.o FORCE
 
 $(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)
 	$(Q)if ! [ -e $@ ]; then ln -s $< $@; fi
-
-# If there is no librumpclient_pic.a, skip sysproxy client build
-ifeq (,$(wildcard $(RUMP_CLIENT_DIR)/librumpclient_pic.a))
-  ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack-sysproxy$(SOSUF), $(ALL_LIBRARIES))
-endif
-
-ifneq (,$(wildcard $(RUMP_INCLUDE)/rump/rumpuser.h))
-  ALL_LIBRARIES := $(filter-out $(OUTPUT)liblkl-hijack$(SOSUF), $(ALL_LIBRARIES))
-  all: $(ALL_LIBRARIES)
-  install: headers_install libraries_install
-endif
 
 clean:
 	$(call QUIET_CLEAN, objects)find $(OUTPUT) -name '*.o' -delete -o -name '\.*.cmd'\

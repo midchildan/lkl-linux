@@ -19,7 +19,22 @@ progs-$(LKL_HOST_CONFIG_ARCHIVE) += cptofs
 LDLIBS_cptofs-y := -larchive
 LDLIBS_cptofs-$(LKL_HOST_CONFIG_NEEDS_LARGP) += -largp
 
+ifneq ($(LKL_HOST_CONFIG_RUMP),y)
 progs-y += tests/boot
 progs-y += tests/disk
 progs-y += tests/net-test
+endif
 
+
+# rump specific targets
+ifeq ($(LKL_HOST_CONFIG_RUMP),y)
+
+# If there is no librumpclient_pic.a, skip sysproxy client build
+ifneq (,$(wildcard $(RUMP_CLIENT_DIR)/librumpclient_pic.a))
+libs-y += lib/liblkl-hijack-sysproxy
+LDLIBS_lib/hijack/liblkl-hijack-sysproxy-y := $(OUTPUT)/lib/net.o
+LDLIBS_lib/hijack/liblkl-hijack-sysproxy-y += -ldl $(RUMP_CLIENT_DIR)/librumpclient_pic.a
+LDFLAGS_lib/hijack/liblkl-hijack-sysproxy += -shared -nodefaultlibs
+endif
+
+endif

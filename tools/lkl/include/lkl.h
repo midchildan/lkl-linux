@@ -457,7 +457,7 @@ int lkl_netdev_get_ifindex(int id);
  * on host in advance
  * @offload - offload bits for the device
  */
-#ifdef LKL_HOST_CONFIG_VIRTIO_NET
+#ifdef LKL_HOST_CONFIG_POSIX
 struct lkl_netdev *lkl_netdev_tap_create(const char *ifname, int offload);
 #else
 static inline struct lkl_netdev *
@@ -507,7 +507,7 @@ static inline struct lkl_netdev *lkl_netdev_vde_create(const char *switch_path)
  *
  * @ifname - interface name for the snoop device.
  */
-#ifdef LKL_HOST_CONFIG_VIRTIO_NET
+#ifdef LKL_HOST_CONFIG_POSIX
 struct lkl_netdev *lkl_netdev_raw_create(const char *ifname);
 #else
 static inline struct lkl_netdev *lkl_netdev_raw_create(const char *ifname)
@@ -542,7 +542,7 @@ lkl_netdev_macvtap_create(const char *path, int offload)
  * on host in advance. delimiter is "|". e.g. "rx_name|tx_name".
  * @offload - offload bits for the device
  */
-#ifdef LKL_HOST_CONFIG_VIRTIO_NET
+#ifdef LKL_HOST_CONFIG_POSIX
 struct lkl_netdev *lkl_netdev_pipe_create(const char *ifname, int offload);
 #else
 static inline struct lkl_netdev *
