@@ -49,7 +49,7 @@ mydir=os.path.dirname(os.path.realpath(__file__))
 tests = [
     'boot.sh',
     'disk.sh -t ext4',
-    'disk.sh -t btrfs',
+#    'disk.sh -t btrfs',
     'disk.sh -t vfat',
     'disk.sh -t xfs',
     'net.sh -b loopback',
@@ -58,7 +58,7 @@ tests = [
     'net.sh -b raw',
     'net.sh -b macvtap',
     'lklfuse.sh -t ext4',
-    'lklfuse.sh -t btrfs',
+#    'lklfuse.sh -t btrfs',
     'lklfuse.sh -t vfat',
     'lklfuse.sh -t xfs',
     'hijack-test.sh'

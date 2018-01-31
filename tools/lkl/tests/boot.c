@@ -104,7 +104,7 @@ int lkl_test_syscall_latency(void)
 
 #define access_rights 0721
 
-LKL_TEST_CALL(creat, lkl_sys_creat, 0, "/file", access_rights)
+LKL_TEST_CALL(creat, lkl_sys_creat, 3, "/file", access_rights)
 LKL_TEST_CALL(close, lkl_sys_close, 0, 0);
 LKL_TEST_CALL(failopen, lkl_sys_open, -LKL_ENOENT, "/file2", 0, 0);
 LKL_TEST_CALL(umask, lkl_sys_umask, 022,  0777);
