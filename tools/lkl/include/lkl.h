@@ -552,6 +552,16 @@ lkl_netdev_pipe_create(const char *ifname, int offload)
 }
 #endif
 
+#ifdef LKL_HOST_CONFIG_RUMP
+struct lkl_netdev *lkl_netdev_rumpfd_lookup(const char *);
+#else
+static inline struct lkl_netdev *
+lkl_netdev_rumpfd_lookup(const char *ifname)
+{
+	return NULL;
+}
+#endif
+
 /*
  * lkl_register_dbg_handler- register a signal handler that loads a debug lib.
  *

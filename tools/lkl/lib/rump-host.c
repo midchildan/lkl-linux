@@ -884,34 +884,49 @@ struct lkl_dev_net_ops rumpfd_ops = {
 	.poll = rump_net_poll,
 };
 
-struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd,
-					    struct lkl_netdev_args *args)
+struct lkl_netdev_rumpfd *rumpfds[16];
+
+struct lkl_netdev *lkl_netdev_rumpfd_create(const char *ifname, int fd)
 {
 	struct lkl_netdev_rumpfd *nd;
-	char offload[8];
 
 	nd = (struct lkl_netdev_rumpfd *)
 		malloc(sizeof(struct lkl_netdev_rumpfd));
 	if (!nd) {
-		lkl_printf("tap: failed to allocate memory\n");
+		lkl_printf("rumpfd: failed to register fd %d\n", fd);
 		return NULL;
 	}
 
-	memset(args, 0, sizeof(struct lkl_netdev_args));
 	nd->fd = fd;
 	nd->dev.ops = &rumpfd_ops;
 
-	if (rumpuser_getparam("LKL_OFFLOAD", offload, sizeof(offload)) == 0) {
-		args->offload  = BIT(LKL_VIRTIO_NET_F_GUEST_CSUM) |
-			BIT(LKL_VIRTIO_NET_F_GUEST_TSO4) |
-			BIT(LKL_VIRTIO_NET_F_MRG_RXBUF) |
-			BIT(LKL_VIRTIO_NET_F_CSUM) |
-			BIT(LKL_VIRTIO_NET_F_HOST_TSO4);
-		nd->dev.has_vnet_hdr = 1;
+	/* register to tmp list */
+	int i;
+	for (i = 0; i < 16; i++) {
+		if (!rumpfds[i]) {
+			rumpfds[i] = nd;
+			break;
+		}
 	}
+	if (i == 16)
+		lkl_printf("rumpfd: can't register fd %d\n", fd);
 
 	return (struct lkl_netdev *)nd;
 }
+
+/* ifparams takes a fd number */
+struct lkl_netdev *lkl_netdev_rumpfd_lookup(const char *ifparams)
+{
+	int fd = atoi(ifparams), i;
+
+	for (i = 0; i < 16 /* MAX_NET_DEVS */; i++) {
+		if (rumpfds[i] && rumpfds[i]->fd == fd)
+			return (struct lkl_netdev *)rumpfds[i];
+	}
+
+	return NULL;
+}
+
 #endif
 
 /* entry/exit points */
