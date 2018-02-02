@@ -7,11 +7,16 @@
 #include <linux/start_kernel.h>
 #include <linux/syscalls.h>
 #include <linux/tick.h>
+#include <linux/of_platform.h>
+#include <linux/of_fdt.h>
+#include <linux/psci.h>
 #include <asm/host_ops.h>
 #include <asm/irq.h>
 #include <asm/unistd.h>
 #include <asm/syscalls.h>
 #include <asm/cpu.h>
+#include <asm/prom.h>
+#include <asm/mach/arch.h>
 
 struct lkl_host_operations *lkl_ops;
 static char cmd_line[COMMAND_LINE_SIZE];
@@ -19,6 +24,8 @@ static void *init_sem;
 static int is_running;
 void (*pm_power_off)(void) = NULL;
 static unsigned long mem_size = 64 * 1024 * 1024;
+
+unsigned int __atags_pointer __initdata;
 
 long lkl_panic_blink(int state)
 {
@@ -35,10 +42,22 @@ early_param("mem", setup_mem_size);
 
 void __init setup_arch(char **cl)
 {
+	const struct machine_desc *mdesc;
+	mdesc = setup_machine_fdt(__atags_pointer);
+	machine_desc = mdesc;
+	dump_stack_set_arch_desc("%s", mdesc->name);
+
 	*cl = cmd_line;
 	panic_blink = lkl_panic_blink;
 	parse_early_param();
 	bootmem_init(mem_size);
+
+	unflatten_device_tree();
+	arm_dt_init_cpu_maps();
+	psci_dt_init();
+
+	if (mdesc->init_early)
+		mdesc->init_early();
 }
 
 static void __init lkl_run_kernel(void *arg)
