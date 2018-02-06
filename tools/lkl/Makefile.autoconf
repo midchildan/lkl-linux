@@ -48,6 +48,7 @@ endef
 define posix_host
   $(call set_autoconf_var,POSIX,y)
   $(call set_autoconf_var,VIRTIO_NET,y)
+  $(call set_autoconf_var,VIRTIO_BLK,y)
   $(call set_autoconf_var,JSON_CONF,y)
   LDFLAGS += -pie
   CFLAGS += -fPIC -pthread
@@ -74,6 +75,7 @@ endef
 
 define nt_host
   $(call set_autoconf_var,NT,y)
+  $(call set_autoconf_var,VIRTIO_BLK,y)
   $(call set_autoconf_var,JSON_CONF,y)
   KOPT = "KALLSYMS_EXTRA_PASS=1"
   LDLIBS += -lws2_32
@@ -96,6 +98,7 @@ define rump_host
     CFLAGS += -DRUMPRUN
     $(call set_autoconf_var,JSON_CONF,n),
   $(call set_autoconf_var,VIRTIO_NET,y)
+    $(call set_autoconf_var,VIRTIO_BLK,y)
     $(call set_autoconf_var,JSON_CONF,y)
     )
 

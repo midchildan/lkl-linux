@@ -552,7 +552,7 @@ lkl_netdev_pipe_create(const char *ifname, int offload)
 }
 #endif
 
-#ifdef LKL_HOST_CONFIG_RUMP
+#if defined(LKL_HOST_CONFIG_RUMP) && !defined(RUMPRUN)
 struct lkl_netdev *lkl_netdev_rumpfd_lookup(const char *);
 #else
 static inline struct lkl_netdev *
