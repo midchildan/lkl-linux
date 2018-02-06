@@ -6,6 +6,10 @@
 
 #include "../../perf/pmu-events/jsmn.h"
 
+#ifdef __MINGW32__
+#define inet_pton lkl_inet_pton
+#endif
+
 int inet_pton(int, const char *, void *);
 
 static int jsoneq(const char *json, jsmntok_t *tok, const char *s)
