@@ -39,6 +39,7 @@ void __init setup_arch(char **cl)
 	panic_blink = lkl_panic_blink;
 	parse_early_param();
 	bootmem_init(mem_size);
+	lkl_setup_host();
 }
 
 static void __init lkl_run_kernel(void *arg)
@@ -136,7 +137,7 @@ long lkl_sys_halt(void)
 	atomic_ops_cleanup();
 	/* Shutdown the clockevents source. */
 	tick_suspend_local();
-	free_mem();
+	lkl_free_mem();
 
 	return 0;
 }

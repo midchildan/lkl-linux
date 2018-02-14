@@ -19,6 +19,9 @@ endif
 ifeq ($(OUTPUT_FORMAT),elf32-littlearm)
 CFLAGS_ABI      :=-mabi=aapcs-linux -mno-thumb-interwork -mfpu=vfp
 KBUILD_CFLAGS += $(CFLAGS_ABI)
+KBUILD_DEFCONFIG := raspi2_defconfig
+else
+KBUILD_DEFCONFIG := default_defconfig
 endif
 
 ifeq ($(shell uname -s), Linux)
@@ -65,9 +68,15 @@ define make_ns_symbols
 endef
 endif
 
+plat-$(CONFIG_LKL_PLAT_DEFAULT) += default
+plat-$(CONFIG_LKL_PLAT_RASPI2)  += raspi2
+
+platdirs := $(patsubst %,arch/lkl/plat-%/,$(sort $(plat-y)))
+
 core-y += arch/lkl/kernel/
 core-y += arch/lkl/mm/
 core-y += arch/lkl/drivers/
+core-y += $(platdirs)
 
 all: lkl.o
 
@@ -87,12 +96,23 @@ install: lkl.o __headers arch/lkl/include/generated/uapi/asm/syscall_defs.h
 		$(subst -j,-j$(NPROC),$(findstring -j,$(MAKEFLAGS))) \
 		$(INSTALL_PATH)/include
 
+archprepare:
+	$(Q)$(MAKE) $(build)=$(word 1,$(platdirs))/ archprepare
+
+%.dtb:
+	$(Q)$(MAKE) $(build)=$(word 1,$(platdirs))/ $@
+
+PHONY += dtbs dtbs_install
+
+dtbs:
+	$(Q)$(MAKE) $(build)=$(word 1,$(platdirs))/ $@
+
+dtbs_install:
+	$(Q)$(MAKE) $(build)=$(word 1,$(platdirs))/ $@
+
 archclean:
 	$(Q)$(MAKE) $(clean)=$(boot)
 
 define archhelp
   echo '  install	- Install library and headers to INSTALL_PATH/{lib,include}'
 endef
-
-
-

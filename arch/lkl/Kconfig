@@ -15,11 +15,6 @@ config LKL
        select HAS_DMA
        select DMA_NOOP_OPS
        select PHYS_ADDR_T_64BIT if 64BIT
-       select 64BIT if OUTPUT_FORMAT = "elf64-x86-64"
-	   select 64BIT if OUTPUT_FORMAT = "pe-x86-64"
-       select HAVE_UNDERSCORE_SYMBOL_PREFIX if OUTPUT_FORMAT = "pe-i386"
-       select 64BIT if OUTPUT_FORMAT = "elf64-x86-64-freebsd"
-       select 64BIT if OUTPUT_FORMAT = "elf64-littleaarch64"
        select NET
        select MULTIUSER
        select INET
@@ -42,6 +37,26 @@ config LKL
        select ARCH_NO_COHERENT_DMA_MMAP
        select FUTEX
 
+config LKL_PLAT_DEFAULT
+       bool "Default platform for LKL"
+       default n
+       select 64BIT if OUTPUT_FORMAT = "elf64-x86-64"
+       select 64BIT if OUTPUT_FORMAT = "pe-x86-64"
+       select HAVE_UNDERSCORE_SYMBOL_PREFIX if OUTPUT_FORMAT = "pe-i386"
+       select 64BIT if OUTPUT_FORMAT = "elf64-x86-64-freebsd"
+       select 64BIT if OUTPUT_FORMAT = "elf64-littleaarch64"
+
+config LKL_PLAT_RASPI2
+       bool "Raspberry Pi 2"
+       default n
+       select LKL_ARCH_ARM
+       select OF
+
+config LKL_ARCH_ARM
+       bool "ARM processor family"
+       select OF_EARLY_FLATTREE if OF
+       select OF_RESERVED_MEM if OF
+       default n
 
 config OUTPUTFORMAT
        string

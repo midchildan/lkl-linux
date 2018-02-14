@@ -8,4 +8,6 @@ extern struct lkl_host_operations *lkl_ops;
 
 #define lkl_puts(text) lkl_ops->print(text, strlen(text))
 
+void lkl_setup_host(void);
+
 #endif

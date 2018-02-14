@@ -69,7 +69,7 @@ void free_initmem(void)
 {
 }
 
-void free_mem(void)
+void lkl_free_mem(void)
 {
 	lkl_ops->mem_free((void *)_memory_start);
 }

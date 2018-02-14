@@ -54,6 +54,13 @@ extern void *empty_zero_page;
 #define	KMAP_START		0
 #define	KMAP_END		0xffffffff
 
+#ifndef CONFIG_MMU
+#define pgprot_noncached(prot)  (prot)
+#define pgprot_writecombine(prot) (prot)
+#define pgprot_dmacoherent(prot) (prot)
+#define pgprot_device(prot)     (prot)
+#endif
+
 #include <asm-generic/pgtable.h>
 
 #define check_pgt_cache()	do { } while (0)

@@ -13,6 +13,12 @@ SECTIONS
 	HEAD_TEXT_SECTION
 	INIT_TEXT_SECTION(PAGE_SIZE)
 	INIT_DATA_SECTION(16)
+	.init.arch.info :
+	{
+		__arch_info_begin = .;
+		*(.arch.info.init)
+		__arch_info_end = .;
+	}
 	PERCPU_SECTION(L1_CACHE_BYTES)
 	VMLINUX_SYMBOL(__init_end) = .;
 
