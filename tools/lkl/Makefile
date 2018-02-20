@@ -7,6 +7,8 @@ RUMP_PREFIX?=
 RUMP_INCLUDE?=$(RUMP_PREFIX)/
 export RUMP_INCLUDE
 
+KCONFIG?=defconfig
+
 ifneq ($(silent),1)
   ifneq ($(V),1)
 	QUIET_AUTOCONF       = @echo '  AUTOCONF '$@;
@@ -63,7 +65,7 @@ endif
 
 # rule to build lkl.o
 $(OUTPUT)lib/lkl.o: bin/stat
-	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) defconfig
+	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) $(KCONFIG)
 # this workaround is for arm32 linker (ld.gold)
 	$(Q)export PATH=$(srctree)/tools/lkl/bin/:${PATH} ;\
 	$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(OUTPUT)
