@@ -1,5 +1,5 @@
 
-obj-y = rumpdev_pci.o
+obj-$(CONFIG_PCI) = rumpdev_pci.o
 
 # need to build with
 librumpdev_linux_pci.a: ${RUMP_BMK_PCI_HYPERCALLS}

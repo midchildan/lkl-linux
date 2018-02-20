@@ -41,10 +41,6 @@ config LKL
        select IPV6_ADVANCED_ROUTER
        select ARCH_NO_COHERENT_DMA_MMAP
        select FUTEX
-       select 9P_FS
-       select NET_9P
-       select NET_9P_VIRTIO
-       select NET_9P_DEBUG
 
 
 config OUTPUTFORMAT
@@ -88,6 +84,14 @@ config PCI
 	select NO_GENERIC_PCI_IOPORT_MAP
 	select GENERIC_PCI_IOMAP
 	default y
+
+config 9P_FS
+       tristate "Plan 9 filesystem"
+       depends on NET_9P
+       select NET_9P_VIRTIO
+       select NET_9P_DEBUG
+       default y
+
 
 source init/Kconfig
 

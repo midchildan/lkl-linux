@@ -566,8 +566,10 @@ struct lkl_host_operations lkl_host_ops = {
 	.iomem_access = lkl_iomem_access,
 	.jmp_buf_set = jmp_buf_set,
 	.jmp_buf_longjmp = jmp_buf_longjmp,
+#ifdef CONFIG_PCI
 	.irq_request = rump_pci_irq_request,
 	.irq_release = rump_pci_irq_release,
+#endif
 	.getparam = (int (*)(const char *, void *, int))rumpuser_getparam,
 #ifndef RUMPRUN
 	.virtio_devices = lkl_virtio_devs,
