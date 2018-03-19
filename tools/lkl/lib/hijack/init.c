@@ -20,6 +20,7 @@
 #include <lkl_config.h>
 
 #include "xlate.h"
+#include "init.h"
 
 #define __USE_GNU
 #include <dlfcn.h>
@@ -184,6 +185,9 @@ hijack_init(void)
 	}
 
 	lkl_running = 1;
+
+	/* initialize epoll manage list */
+	memset(dual_fds, -1, sizeof(int) * LKL_FD_OFFSET);
 
 	/* restore cpu affinity */
 	if (single_cpu_mode)
