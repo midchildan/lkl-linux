@@ -51,11 +51,18 @@ config LKL_PLAT_RASPI2
        default n
        select LKL_ARCH_ARM
        select OF
+       select ARCH_BCM2835
+       select BCM2835_TIMER
 
 config LKL_ARCH_ARM
        bool "ARM processor family"
        select OF_EARLY_FLATTREE if OF
        select OF_RESERVED_MEM if OF
+       select COMMON_CLK if !MMU
+       default n
+
+config ARCH_BCM2835
+       bool "Broadcom BCM2835 family"
        default n
 
 config OUTPUTFORMAT

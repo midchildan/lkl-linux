@@ -7,13 +7,19 @@
 #include <asm/host_ops.h>
 
 // arm
+#include <asm/cputype.h>
 #include <asm/mach/arch.h>
 #include <asm/prom.h>
 
-extern unsigned int __atags_pointer;
-const struct machine_desc *machine_desc __initdata;
+unsigned int __machine_arch_type __read_mostly;
+EXPORT_SYMBOL(__machine_arch_type);
 
-void __init lkl_setup_host(void) {
+unsigned int __atags_pointer __initdata;
+const struct machine_desc *machine_desc __initdata;
+u32 __cpu_logical_map[NR_CPUS] = { [0 ... NR_CPUS-1] = MPIDR_INVALID };
+
+void __init lkl_setup_host(void)
+{
 	const struct machine_desc *mdesc;
 	mdesc = setup_machine_fdt(__atags_pointer);
 	machine_desc = mdesc;
