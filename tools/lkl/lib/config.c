@@ -492,6 +492,8 @@ static int lkl_config_netdev_create(struct lkl_config *cfg,
 						    mac);
 		} else if ((strcmp(iface->iftype, "pipe") == 0)) {
 			nd = lkl_netdev_pipe_create(iface->ifparams, offload);
+		} else if ((strcmp(iface->iftype, "raspi") == 0)) {
+			nd = lkl_netdev_raspi_create();
 		} else {
 			if (offload) {
 				lkl_printf("WARN: %s isn't supported on %s\n",
