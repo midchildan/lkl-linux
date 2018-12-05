@@ -19,6 +19,19 @@ static inline size_t min(size_t a, size_t b)
 	return (a > b) ? b : a;
 }
 
+static inline void platform_sleep(void)
+{
+	typedef int64_t time_t;
+	struct __platform_timespec { time_t tv_sec; long tv_nsec; };
+	extern int __platform_clock_nanosleep(int clock_id, int flags,
+					      const struct timespec *request,
+					      struct timespec *remain);
+
+	struct __platform_timespec sl = {0, 0};
+
+	__platform_clock_nanosleep(3 /* == CLOCK_MONOTONIC */, 0, &sl, NULL);
+}
+
 static int net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 {
 	struct lkl_netdev_raspi *nd_raspi =
@@ -37,8 +50,8 @@ static int net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 		else if (len == 0)
 			continue;
 
-		sent += to_send;
 		memcpy(buffer + sent, iov[seg].iov_base, to_send);
+		sent += to_send;
 	}
 
 	if (sent > 0) {
@@ -83,6 +96,9 @@ static int net_poll(struct lkl_netdev *nd)
 	if (nd_raspi->is_closed)
 		return LKL_DEV_NET_POLL_HUP;
 
+	// XXX: Necessary to avoid deadlocks
+	platform_sleep();
+
 	return LKL_DEV_NET_POLL_RX | LKL_DEV_NET_POLL_TX;
 }
 
@@ -120,5 +136,6 @@ struct lkl_netdev *lkl_netdev_raspi_create(void)
 
 	nd->is_closed = 0;
 	nd->dev.ops = &raspi_net_ops;
+	nd->dev.has_vnet_hdr = 0;
 	return nd;
 }
